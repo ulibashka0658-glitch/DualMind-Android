@@ -20,6 +20,8 @@ export default function DiagnosticsSettingsGroup() {
   const [busy, setBusy] = useState(false);
   const sharing = useRef(false);
   const llm = useLLM();
+  const latestLLM = useRef(llm);
+  latestLLM.current = llm;
   const t = (ru: string, en: string) => translateUi(language, ru, en);
   const styles = StyleSheet.create({
     view: { paddingHorizontal: 16, gap: 10 },
@@ -99,6 +101,48 @@ export default function DiagnosticsSettingsGroup() {
     }
   };
 
+  const selectRealModel = async (modelId: string) => {
+    if (sharing.current || latestLLM.current.busy) return;
+    sharing.current = true;
+    setBusy(true);
+    const provider = latestLLM.current.type;
+    const currentModels = () => {
+      const current = latestLLM.current;
+      if (current.type !== provider || current.busy) return [];
+      return current.type === "Llama" && current.modelFiles ? Object.keys(current.modelFiles) : (current.models ?? []);
+    };
+    try {
+      const dispatcher = createControlDispatcher({
+        status: modelStatus,
+        diagnostics: modelStatus,
+        models: currentModels,
+        tasks: () => [],
+        selectModel: id => {
+          const current = latestLLM.current;
+          if (!currentModels().includes(id)) throw new Error("Model unavailable");
+          const setter = current.type === "Llama" ? current.setModelKey : current.setModel;
+          if (!setter) throw new Error("Selection unavailable");
+          setter(id);
+        },
+        cancelTask: () => { throw new Error("Not enabled"); },
+        confirm: () => new Promise<boolean>(resolve => Alert.alert(
+          t("Переключение модели", "Switch model"),
+          t("Выбрать модель: ", "Select model: ") + modelId,
+          [
+            { text: t("Отмена", "Cancel"), style: "cancel", onPress: () => resolve(false) },
+            { text: t("Разрешить", "Allow"), onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        )),
+      });
+      const result = await dispatcher({ version: 1, id: Crypto.randomUUID(), action: "models.select", params: { modelId } });
+      Alert.alert(t("Результат команды", "Command result"), JSON.stringify(result, null, 2));
+    } finally {
+      sharing.current = false;
+      setBusy(false);
+    }
+  };
+
   const shareDiagnostics = async () => {
     if (sharing.current) return;
     sharing.current = true;
@@ -155,6 +199,11 @@ export default function DiagnosticsSettingsGroup() {
       <Pressable accessibilityRole="button" disabled={busy} onPress={runConsentCheck} style={styles.button}>
         <Text style={styles.buttonText}>{t("Проверить подтверждение команд", "Check command confirmation")}</Text>
       </Pressable>
+      {availableModels().map(id => (
+        <Pressable key={id} accessibilityRole="button" disabled={busy || llm.busy} onPress={() => selectRealModel(id)} style={styles.button}>
+          <Text style={styles.buttonText}>{t("Выбрать модель: ", "Select model: ")}{id}</Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
