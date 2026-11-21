@@ -7,6 +7,7 @@ on:
       - '.github/workflows/import-maid.yml'
 permissions:
   contents: write
+  actions: write
 jobs:
   import:
     runs-on: ubuntu-latest
