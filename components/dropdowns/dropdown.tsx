@@ -1,17 +1,19 @@
 import { MaterialIconButton } from "@/components/buttons/icon-button";
 import { useSystem } from "@/context";
-import React, { Fragment, useRef, useState } from "react";
+import React, { useState } from "react";
 import {
-  Dimensions,
-  LayoutRectangle,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
+  Pressable,
+  TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
+
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface DropdownItem<T> {
   label: string | React.ReactNode;
@@ -26,9 +28,6 @@ interface DropdownProps<T> {
   equalityFn?: (a: T, b: T) => boolean;
 }
 
-const POPOVER_MIN_WIDTH = 180;
-const POPOVER_VERT_GAP = 8;
-
 function Dropdown<T>({
   items,
   selectedValue,
@@ -37,24 +36,15 @@ function Dropdown<T>({
 }: DropdownProps<T>) {
   const { colorScheme } = useSystem();
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<LayoutRectangle | null>(null);
-  const rootRef = useRef<View>(null);
-
-  const selectedItem =
-    items.find((item) => equalityFn ? equalityFn(item.value, selectedValue) : item.value == selectedValue) ?? items[0];
-
-  const openMenu = () => {
-    if (rootRef.current) {
-      rootRef.current.measureInWindow((x, y, width, height) => {
-        setAnchor({ x, y, width, height });
-        setOpen(true);
-      });
-    } else {
-      setAnchor(null);
-      setOpen(true);
-    }
-  };
-
+  const [query, setQuery] = useState("");
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isSelected = (item: DropdownItem<T>) => equalityFn ? equalityFn(item.value, selectedValue) : item.value == selectedValue;
+  const selectedItem = items.find(isSelected) ?? items[0];
+  const selectedLabel = selectedItem?.selectedLabel ?? selectedItem?.label;
+  const searchable = items.length > 8 && items.every(item => typeof item.label === "string");
+  const visibleItems = searchable ? items.filter(item => String(item.label).toLowerCase().includes(query.trim().toLowerCase())) : items;
+  const openMenu = () => { setQuery(""); setOpen(true); };
   const closeMenu = () => setOpen(false);
 
   const styles = StyleSheet.create({
@@ -75,17 +65,18 @@ function Dropdown<T>({
       paddingHorizontal: 6, 
       paddingVertical: 2 
     },
-    overlay: { 
-      flex: 1, 
-      backgroundColor: "transparent" 
+    overlay: {
+      flex: 1, backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center", alignItems: "center",
+      paddingTop: insets.top, paddingBottom: insets.bottom,
     },
     popover: {
-      position: "absolute",
+      width: Math.max(0, Math.min(420, width - insets.left - insets.right - 32)),
+      maxHeight: Math.max(0, Math.min(560, height - insets.top - insets.bottom - 32)),
       backgroundColor: colorScheme.surfaceVariant,
-      borderRadius: 12,
-      paddingVertical: 6,
-      maxHeight: 400,
+      borderRadius: 16, padding: 12,
     },
+    search: { color: colorScheme.onSurface, borderColor: colorScheme.outlineVariant, borderWidth: 1, borderRadius: 8, padding: 10, marginBottom: 8 },
     itemBtn: { 
       paddingVertical: 10, 
       paddingHorizontal: 12 
@@ -96,75 +87,35 @@ function Dropdown<T>({
     },
   });
 
-  // Compute popover position based on anchor, with clamping
-  const popoverStyle = (() => {
-    const screen = Dimensions.get("window");
-    if (!anchor) {
-      return { bottom: 0, left: 0, width: POPOVER_MIN_WIDTH };
-    }
-    const width = Math.max(POPOVER_MIN_WIDTH, anchor.width);
-    let left = anchor.x + anchor.width / 2 - width / 2;
-    left = Math.max(8, Math.min(left, screen.width - width - 8));
-
-    // prefer below; if not enough space, put above
-    let top = anchor.y + anchor.height + 80;
-    if (top + 200 > screen.height) {
-      top = anchor.y - 200 - POPOVER_VERT_GAP;
-    }
-    top = Math.max(8, Math.min(top, screen.height - 200 - 8));
-
-    return { top, left, width };
-  })();
-
   const Popover = (
-    <Modal
-      transparent
-      visible={open}
-      animationType="fade"
-      onRequestClose={closeMenu}
-      statusBarTranslucent
-    >
-      <TouchableWithoutFeedback onPress={closeMenu}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <ScrollView style={[styles.popover, popoverStyle]}>
-              {items.map((item, idx) => (
-                <Fragment key={`${item.label}-${idx}`}>
-                  <TouchableOpacity
-                    style={styles.itemBtn}
-                    onPress={() => {
-                      onValueChange(item.value);
-                      closeMenu();
-                    }}
-                  >
-                    {typeof item.label === "string" ? (
-                      <Text style={styles.itemText}>{item.label}</Text>
-                    ) : (
-                      item.label
-                    )}
-                  </TouchableOpacity>
-                </Fragment>
-              ))}
-            </ScrollView>
-          </TouchableWithoutFeedback>
+    <Modal transparent visible={open} animationType="fade" onRequestClose={closeMenu} statusBarTranslucent>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} accessibilityLabel="Close" />
+        <View style={styles.popover} accessibilityViewIsModal>
+          {searchable && <TextInput style={styles.search} value={query} onChangeText={setQuery} placeholder="🔍" placeholderTextColor={colorScheme.onSurface} accessibilityLabel="Search options" />}
+          <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} showsVerticalScrollIndicator persistentScrollbar keyboardShouldPersistTaps="handled">
+            {visibleItems.map((item, idx) => (
+              <TouchableOpacity key={idx} accessibilityRole="button" accessibilityState={{ selected: isSelected(item) }}
+                style={[styles.itemBtn, isSelected(item) && { backgroundColor: colorScheme.primaryContainer, borderRadius: 8 }]}
+                onPress={() => { onValueChange(item.value); closeMenu(); }}>
+                {typeof item.label === "string" ? <Text style={[styles.itemText, isSelected(item) && { color: colorScheme.onPrimaryContainer }]}>{item.label}{isSelected(item) ? "  ✓" : ""}</Text> : item.label}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
-      </TouchableWithoutFeedback>
+      </View>
     </Modal>
   );
 
-  if (selectedItem && !selectedItem.selectedLabel) {
-    selectedItem.selectedLabel = selectedItem.label;
-  }
-
   return (
-    <View ref={rootRef} style={styles.rootWrapper} collapsable={false}>
+    <View style={styles.rootWrapper} collapsable={false}>
       <View style={styles.root}>
-        {typeof selectedItem?.selectedLabel === "string" ? (
+        {typeof selectedLabel === "string" ? (
           <Text style={styles.label} numberOfLines={1}>
-            {selectedItem.selectedLabel}
+            {selectedLabel}
           </Text>
         ) : (
-          selectedItem?.selectedLabel
+          selectedLabel
         )}
         <MaterialIconButton
           icon={open ? "arrow-drop-up" : "arrow-drop-down"}
