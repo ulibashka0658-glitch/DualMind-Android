@@ -74,7 +74,7 @@ function ModelButton() {
       <TouchableOpacity testID="model-button" style={styles.button} onPress={open} activeOpacity={0.8}>
         <Icon name="chevron-triple-left" size={20} color={colorScheme.onPrimary} />
         <Text style={styles.text} numberOfLines={1}>
-          {modelKey ? modelKey : "Load Model"}
+          {modelKey ? modelKey : "Загрузить модель"}
         </Text>
         <Icon name="chevron-triple-right" size={20} color={colorScheme.onPrimary} />
       </TouchableOpacity>
@@ -96,7 +96,7 @@ function ModelButton() {
             pickModelFile();
           }}
         >
-          <Text style={styles.popoverText}>Load Model</Text>
+          <Text style={styles.popoverText}>Загрузить модель</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -107,7 +107,7 @@ function ModelButton() {
             router.push("/download");
           }}
         >
-          <Text style={styles.popoverText}>Download Model</Text>
+          <Text style={styles.popoverText}>Скачать модель</Text>
         </TouchableOpacity>
       </Popover>
     </View>
