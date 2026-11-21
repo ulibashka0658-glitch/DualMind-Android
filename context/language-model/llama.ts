@@ -5,6 +5,21 @@ import { initLlama, loadLlamaModelInfo, RNLlamaOAICompatibleMessage } from 'llam
 import { MessageNode } from 'message-nodes';
 import { LanguageModelClient, LanguageModelSettings } from "./types";
 
+async function measureLlama<T>(operation: string, run: () => Promise<T>): Promise<T> {
+  const started = performance.now();
+  let success = false;
+  try {
+    const result = await run();
+    success = true;
+    return result;
+  } finally {
+    console.log("[DualMind performance]", operation, {
+      durationMs: Math.round(performance.now() - started),
+      success,
+    });
+  }
+}
+
 async function isGGUF(fileUri: string): Promise<boolean> {
   try {
     // Read first 4 bytes as base64, then decode to bytes
@@ -127,7 +142,7 @@ export async function connectLlama(
   // Ensure the selected file is a GGUF model before proceeding
   if (!(await isGGUF(modelFile))) return;
 
-  const info = await loadLlamaModelInfo(modelFile) as Record<string, any>;
+  const info = await measureLlama("metadata", () => loadLlamaModelInfo(modelFile)) as Record<string, any>;
   const ctx_key = Object.keys(info).find(key => key.toLowerCase().endsWith("context_length"));
   const advertisedContext = ctx_key ? Number(info[ctx_key]) : 2048;
   const n_ctx = Number.isFinite(advertisedContext) && advertisedContext > 0
@@ -140,7 +155,7 @@ export async function connectLlama(
       ? projectorFiles[projectorKey]
       : undefined;
 
-  const llama = await initLlama({
+  const llama = await measureLlama("load", () => initLlama({
     model: modelFile,
     use_mlock: Platform.OS !== "android",
     n_ctx,
@@ -149,7 +164,7 @@ export async function connectLlama(
     ...(Platform.OS === "android" ? { n_threads: 4, n_batch: 128 } : {}),
     ...parameters,
     ctx_shift: !projectorFile
-  });
+  }));
 
   let imagesSupported = false;
 
@@ -171,13 +186,13 @@ export async function connectLlama(
   return {
     imagesSupported,
     prompt: async ({ messages, onUpdate }) => {
-      const result = await llama.completion({
+      const result = await measureLlama("generate", () => llama.completion({
         messages: parseMessages(messages)
-      }, (data) => onUpdate(data.token));
+      }, (data) => onUpdate(data.token)));
 
       console.log('Timings:', result.timings);
     },
-    stop: () => llama.stopCompletion(),
-    release: () => llama.release(),
+    stop: () => measureLlama("stop", () => llama.stopCompletion()),
+    release: () => measureLlama("release", () => llama.release()),
   };
 }
