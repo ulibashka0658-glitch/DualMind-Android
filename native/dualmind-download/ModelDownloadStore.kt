@@ -50,6 +50,28 @@ class ModelDownloadStore(private val context: Context) {
             )
         }
 
+    @Synchronized
+    fun completedUri(key: String): String {
+        val id = prefs.getLong(key, -1L)
+        require(id >= 0) { "Unknown download" }
+        val snapshot = requireNotNull(query(id))
+        check(snapshot.status == DownloadManager.STATUS_SUCCESSFUL)
+        check(snapshot.total > 0 && snapshot.bytes == snapshot.total)
+        val uri = requireNotNull(manager.getUriForDownloadedFile(id))
+        val header = ByteArray(4)
+        context.contentResolver.openInputStream(uri).use { stream ->
+            requireNotNull(stream)
+            var offset = 0
+            while (offset < header.size) {
+                val count = stream.read(header, offset, header.size - offset)
+                check(count > 0) { "Incomplete GGUF header" }
+                offset += count
+            }
+        }
+        check(header.contentEquals(byteArrayOf(71, 71, 85, 70))) { "Invalid GGUF header" }
+        return uri.toString()
+    }
+
     fun tracked(): Map<String, Long> = prefs.all.mapNotNull { (key, value) ->
         (value as? Long)?.let { key to it }
     }.toMap()
