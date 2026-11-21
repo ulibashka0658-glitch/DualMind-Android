@@ -370,6 +370,8 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
 
 function Download() {
   const { colorScheme } = useSystem();
+  const { modelFiles, modelKey, busy, ready, setModelKey, projectorFiles, setProjectorKey, pickModelFile } = useLLM();
+  const [tab, setTab] = useState<"library" | "catalog">("library");
   const insets = useSafeAreaInsets();
 
   const styles = StyleSheet.create({
@@ -393,12 +395,41 @@ function Download() {
       style={styles.view}
       contentContainerStyle={styles.content}
     >
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        {(["library", "catalog"] as const).map(item => (
+          <TouchableOpacity key={item} accessibilityRole="button" accessibilityState={{ selected: tab === item }} onPress={() => setTab(item)}
+            style={{ padding: 12, borderRadius: 16, backgroundColor: tab === item ? colorScheme.primary : colorScheme.primaryContainer }}>
+            <Text style={{ color: tab === item ? colorScheme.onPrimary : colorScheme.onPrimaryContainer }}>{item === "library" ? "Скачанные модели" : "Скачать модели"}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity accessibilityRole="button" disabled={busy || !pickModelFile} onPress={() => { void pickModelFile?.().catch(() => Alert.alert("Не удалось импортировать модель")); }}
+          style={{ padding: 12, borderRadius: 16, backgroundColor: colorScheme.primaryContainer, opacity: busy || !pickModelFile ? 0.5 : 1 }}>
+          <Text style={{ color: colorScheme.onPrimaryContainer }}>Импорт GGUF</Text>
+        </TouchableOpacity>
+      </View>
+      {tab === "library" && (
+        <View style={{ gap: 12 }}>
+          {Object.keys(modelFiles ?? {}).length === 0 && <Text style={{ color: colorScheme.onSurface }}>Нет скачанных моделей. Откройте каталог или импортируйте GGUF.</Text>}
+          {Object.keys(modelFiles ?? {}).sort().map(key => (
+            <View key={key} style={{ padding: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: colorScheme.outlineVariant }}>
+              <Text style={{ color: colorScheme.onSurface }}>{key}</Text>
+              <TouchableOpacity accessibilityRole="button" disabled={busy || !setModelKey || (modelKey === key && ready)}
+                onPress={() => { setProjectorKey?.(projectorFiles?.[key] ? key : undefined); setModelKey?.(key); }}
+                style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme.primaryContainer, opacity: busy ? 0.5 : 1 }}>
+                <Text style={{ color: colorScheme.onPrimaryContainer }}>{modelKey === key ? (busy ? "Загрузка / ожидание" : ready ? "Активна" : "Загрузить в память") : "Выбрать модель"}</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+      <View style={{ display: tab === "catalog" ? "flex" : "none" }}>
       {HuggingfaceModels.map((model, index) => (
         <ModelDownload 
           key={index}
           source={model}
         />
       ))}
+      </View>
     </ScrollView>
   );
 }
