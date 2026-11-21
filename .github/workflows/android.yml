@@ -19,7 +19,20 @@ jobs:
         with:
           gradle-version: "8.10.2"
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - run: gradle --no-daemon :app:assembleDebug
+      - name: Compile debug APK
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace :app:assembleDebug 2>&1 | tee build.log
+        shell: bash
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DualMind-build-log
+          path: build.log
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: DualMind-debug-apk
