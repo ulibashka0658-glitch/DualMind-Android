@@ -5,7 +5,7 @@ import HuggingfaceModelsRaw from "@/models.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from 'expo-file-system/legacy';
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface HuggingfaceModel {
@@ -24,6 +24,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
   const { colorScheme } = useSystem();
   const { id, name, repo, branch, tags } = source;
 
+  const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState<FileSystem.DownloadProgressData | undefined>(undefined);
   const [projectorProgress, setProjectorProgress] = useState<FileSystem.DownloadProgressData | undefined>(undefined);
   const [tag, setTag] = useState<string>(Object.keys(tags)[0]);
@@ -62,69 +63,52 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
   const downloadModel = async () => {
     if (downloaded) return;
 
-    // if something is already downloading, don't start another
-    if (downloadRef.current && activeKeyRef.current === currentKey) {
-      try {
-        await downloadRef.current.resumeAsync();
-      } catch {
-        // ignore; might already be running
-      }
-      if (projectorDownloadRef.current) {
-        try { await projectorDownloadRef.current.resumeAsync(); } catch {}
-      }
+    if (activeKeyRef.current) return;
+    if (!FileSystem.documentDirectory || !modelFileName || !setModelFiles || !setModelKey) {
+      Alert.alert("Ошибка загрузки / Download error", "Model storage unavailable");
       return;
     }
-
-    // If a different tag/model is downloading, block to avoid losing the other download.
-    if (downloadRef.current && activeKeyRef.current !== currentKey) {
-      console.warn("Another download is already running; not starting a second one.");
-      return;
-    }
-
     activeKeyRef.current = currentKey;
-
-    const modelResumable = FileSystem.createDownloadResumable(
-      modelUrl, modelFilePath, {},
-      (p) => { if (mountedRef.current) setProgress(p); }
-    );
-    downloadRef.current = modelResumable;
-
-    const downloads: Promise<FileSystem.FileSystemDownloadResult | undefined>[] = [modelResumable.downloadAsync()];
-
-    if (projectorUrl && projectorFilePath) {
-      const projectorResumable = FileSystem.createDownloadResumable(
-        projectorUrl, projectorFilePath, {},
-        (p) => { if (mountedRef.current) setProjectorProgress(p); }
-      );
-      projectorDownloadRef.current = projectorResumable;
-      downloads.push(projectorResumable.downloadAsync());
-    }
-
+    setIsDownloading(true);
     try {
-      const [modelResult, projectorResult] = await Promise.all(downloads);
-
-      setModelFiles?.((prev) => ({ ...prev, [currentKey]: modelResult?.uri ?? modelFilePath }));
-      setModelKey?.(currentKey);
-
-      if (projectorResult && projectorFilePath) {
-        setProjectorFiles?.((prev) => ({ ...prev, [currentKey]: projectorResult.uri ?? projectorFilePath }));
-        setProjectorKey?.(currentKey);
+      const transfer = async (url: string, path: string, update: (p: FileSystem.DownloadProgressData) => void, projector = false) => {
+        const job = FileSystem.createDownloadResumable(url, path, {}, p => {
+          if (mountedRef.current) update(p);
+        });
+        if (projector) projectorDownloadRef.current = job;
+        else downloadRef.current = job;
+        const result = await job.downloadAsync();
+        if (!result || result.status !== 200) throw new Error("Download HTTP status: " + (result?.status ?? "no result"));
+        const info = await FileSystem.getInfoAsync(result.uri);
+        if (!info.exists || info.isDirectory || !info.size) throw new Error("Downloaded file missing or empty");
+        const header = await FileSystem.readAsStringAsync(result.uri, { encoding: FileSystem.EncodingType.Base64, position: 0, length: 4 });
+        if (header !== "R0dVRg==") throw new Error("Invalid GGUF header");
+        return result.uri;
+      };
+      const uri = await transfer(modelUrl, modelFilePath, setProgress);
+      if (projectorUrl && projectorFilePath) {
+        if (!setProjectorFiles || !setProjectorKey) throw new Error("Projector storage unavailable");
+        const projectorUri = await transfer(projectorUrl, projectorFilePath, setProjectorProgress, true);
+        setProjectorFiles(prev => ({ ...prev, [currentKey]: projectorUri }));
+        setProjectorKey(currentKey);
+      } else {
+        setProjectorKey?.(undefined);
       }
-
-      if (mountedRef.current) {
-        setProgress(undefined);
-        setProjectorProgress(undefined);
-      }
+      setModelFiles(prev => ({ ...prev, [currentKey]: uri }));
+      setModelKey(currentKey);
+      if (mountedRef.current) Alert.alert("Файл скачан / File downloaded", name + " " + tag);
     } catch (error) {
       console.error("Download failed:", error);
-      if (mountedRef.current) {
-        setProgress(undefined);
-        setProjectorProgress(undefined);
-      }
+      if (mountedRef.current) Alert.alert("Ошибка загрузки / Download error", error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, "[URL]") : "Unknown error");
     } finally {
       downloadRef.current = null;
       projectorDownloadRef.current = null;
       activeKeyRef.current = null;
+      if (mountedRef.current) {
+        setIsDownloading(false);
+        setProgress(undefined);
+        setProjectorProgress(undefined);
+      }
     }
   };
 
@@ -251,12 +235,12 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
 
   const percent =
     progress?.totalBytesExpectedToWrite
-      ? Math.round((progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100)
+      ? Math.min(99, Math.floor((progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100))
       : undefined;
 
   const projectorPercent =
     projectorProgress?.totalBytesExpectedToWrite
-      ? Math.round((projectorProgress.totalBytesWritten / projectorProgress.totalBytesExpectedToWrite) * 100)
+      ? Math.min(99, Math.floor((projectorProgress.totalBytesWritten / projectorProgress.totalBytesExpectedToWrite) * 100))
       : undefined;
 
   return (
@@ -266,17 +250,17 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         <Dropdown
           items={Object.keys(tags).map((key) => ({ label: key, value: key }))}
           selectedValue={tag}
-          onValueChange={setTag}
+          onValueChange={value => { if (!activeKeyRef.current) setTag(value); }}
         />
       </View>
 
-      {percent !== undefined && (
+      {isDownloading && (
         <Text style={styles.name}>
-          {projectorFileName ? `Model: ${percent}%  Proj: ${projectorPercent ?? 0}%` : `${percent}%`}
+          {projectorFileName ? `Model: ${percent}%  Proj: ${projectorPercent ?? 0}%` : percent === undefined ? "Starting..." : `${percent}%`}
         </Text>
       )}
 
-      {!progress && !downloaded && (
+      {!isDownloading && !downloaded && (
         <MaterialIconButton
           icon="download"
           size={18}
