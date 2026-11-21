@@ -6,6 +6,8 @@ import * as Network from "expo-network";
 import { getLogs } from "@/utilities/logger";
 import { useRef, useState } from "react";
 import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import * as Crypto from "expo-crypto";
+import { createControlDispatcher } from "@/utils/dualmind-control-dispatcher";
 import { redactDiagnostics } from "@/utils/dualmind-control-protocol";
 
 /**
@@ -26,6 +28,35 @@ export default function DiagnosticsSettingsGroup() {
     button: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colorScheme.primary },
     buttonText: { color: colorScheme.onPrimary, fontSize: 14, fontWeight: "600", textAlign: "center" },
   });
+
+  const modelStatus = () => ({ provider: llm.type, ready: llm.ready, busy: llm.busy, imagesSupported: llm.imagesSupported });
+  const runLocalCheck = async () => {
+    if (sharing.current) return;
+    sharing.current = true;
+    setBusy(true);
+    try {
+      // Only read actions are wired here. Mutation handlers fail closed until their dedicated integration stages.
+      const dispatcher = createControlDispatcher({
+        status: modelStatus,
+        diagnostics: () => ({ modelStatus: modelStatus(), logCount: getLogs().length, remoteControlConnected: false }),
+        models: () => llm.models ?? [],
+        tasks: () => [],
+        selectModel: () => { throw new Error("Not enabled"); },
+        cancelTask: () => { throw new Error("Not enabled"); },
+        confirm: async () => false,
+      });
+      const results = [];
+      for (const action of ["status.read", "diagnostics.read", "models.list"]) {
+        results.push(await dispatcher({ version: 1, id: Crypto.randomUUID(), action }));
+      }
+      Alert.alert(t("Локальная проверка команд", "Local command check"), JSON.stringify(results, null, 2));
+    } catch {
+      Alert.alert(t("Ошибка", "Error"), t("Проверка не выполнена.", "Check failed."));
+    } finally {
+      sharing.current = false;
+      setBusy(false);
+    }
+  };
 
   const shareDiagnostics = async () => {
     if (sharing.current) return;
@@ -83,6 +114,9 @@ export default function DiagnosticsSettingsGroup() {
         style={styles.button}
       >
         <Text style={styles.buttonText}>{t("Поделиться сведениями об устройстве", "Share device diagnostics")}</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" disabled={busy} onPress={runLocalCheck} style={styles.button}>
+        <Text style={styles.buttonText}>{t("Проверить локальные команды", "Check local commands")}</Text>
       </Pressable>
     </View>
   );
