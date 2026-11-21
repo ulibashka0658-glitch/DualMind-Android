@@ -152,6 +152,23 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
     }
   };
 
+  // Reattach only to an existing Android job; never start a new model on mount.
+  useEffect(() => {
+    if (!useNative || downloaded || isDownloading || !modelFileName) return;
+    let alive = true;
+    const restore = async () => {
+      const key = JSON.stringify([currentKey, modelUrl, false]);
+      const snapshot = await nativeDownloads.query(key);
+      if (alive && snapshot && ["pending", "running", "waiting", "completed"].includes(snapshot.state)) {
+        void downloadModel();
+      }
+    };
+    void restore().catch(error => console.error("Download restoration failed:", error));
+    return () => { alive = false; };
+    // Reattach when opening this card or changing the selected quantization.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useNative, downloaded, currentKey, modelUrl, modelFileName]);
+
   const pauseDownload = async () => {
     const projector = projectorDownloadRef.current;
     const job = projector ?? downloadRef.current;
