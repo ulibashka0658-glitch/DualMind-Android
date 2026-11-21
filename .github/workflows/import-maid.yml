@@ -33,13 +33,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git ls-remote --exit-code --heads origin maid-base >/dev/null; then
-            echo 'maid-base already exists; leaving it unchanged'
-            exit 0
-          fi
+          # Import into the dedicated branch; keep main untouched.
+          # A pre-existing maid-base branch is expected.
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch --orphan maid-base
+          git fetch origin maid-base
+          git switch -C maid-base origin/maid-base
           git rm -rf --ignore-unmatch . >/dev/null
           git clean -fdx >/dev/null
           tar -C /tmp/maid-upstream --exclude=.git -cf - . | tar -xf -
