@@ -1,0 +1,32 @@
+name: DualMind code checks
+
+on:
+  push:
+    branches: [maid-base]
+  pull_request:
+    branches: [maid-base]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: TypeScript and Jest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --non-interactive
+      - name: Check TypeScript
+        run: yarn tsc --noEmit
+      - name: Run unit tests
+        if: success() || failure()
+        run: yarn test
