@@ -3,8 +3,8 @@ import { useLLM, useSystem } from "@/context";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import * as Network from "expo-network";
-import { getLogs } from "@/utilities/logger";
-import { useRef, useState } from "react";
+import { getLogs, subscribeLogs } from "@/utilities/logger";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import * as Crypto from "expo-crypto";
 import { createControlDispatcher } from "@/utils/dualmind-control-dispatcher";
@@ -34,6 +34,19 @@ export default function DiagnosticsSettingsGroup() {
   const [busy, setBusy] = useState(false);
   const sharing = useRef(false);
   const llm = useLLM();
+  const [slowCleanup, setSlowCleanup] = useState(false);
+  useEffect(() => {
+    if (!llm.busy) {
+      setSlowCleanup(false);
+      return;
+    }
+    const started = Date.now();
+    const refresh = () => setSlowCleanup(getLogs().some(entry =>
+      entry.time >= started && entry.level === "warn" &&
+      entry.message.startsWith("DualMind: model cleanup is taking longer")
+    ));
+    return subscribeLogs(refresh);
+  }, [llm.busy]);
   const latestLLM = useRef(llm);
   latestLLM.current = llm;
   const t = (ru: string, en: string) => translateUi(language, ru, en);
@@ -256,6 +269,11 @@ export default function DiagnosticsSettingsGroup() {
       <Text style={styles.title}>{t("Диагностика и подключение", "Diagnostics and connection")}</Text>
       <Text style={styles.body}>{t("Удалённое управление: не подключено. Диагностика остаётся на устройстве, пока вы сами не решите поделиться ею.", "Remote control: not connected. Diagnostics stay on your device unless you choose to share them.")}</Text>
       <Text style={styles.body}>{t("Источник модели", "Model provider")}: {llm.type} · {llm.busy ? t("занят", "busy") : llm.ready ? t("готов", "ready") : t("не готов", "not ready")}</Text>
+      {llm.busy && slowCleanup && (
+        <Text accessibilityLiveRegion="polite" style={styles.body}>
+          {t("Выгрузка модели затянулась. Дождитесь освобождения ресурсов. Если приложение не отвечает, перезапустите его.", "Model cleanup is taking longer than expected. Wait for resources to be released. If the app is unresponsive, restart it.")}
+        </Text>
+      )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("Поделиться диагностикой", "Share diagnostics")}
