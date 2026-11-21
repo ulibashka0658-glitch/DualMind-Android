@@ -145,6 +145,8 @@ export async function connectLlama(
     use_mlock: Platform.OS !== "android",
     n_ctx,
     n_gpu_layers: 99,
+    // Conservative Android defaults; explicit user settings still take priority.
+    ...(Platform.OS === "android" ? { n_threads: 4, n_batch: 128 } : {}),
     ...parameters,
     ctx_shift: !projectorFile
   });
