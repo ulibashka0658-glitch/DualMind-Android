@@ -1,4 +1,5 @@
 
+import { UiLanguageProvider } from "@/context/ui-language";
 import DefaultHeader from '@/components/layout/default-header';
 import { ChatContextProvider, LanguageModelProvider, SystemContextProvider, useSystem } from "@/context";
 import { installConsoleCapture } from '@/utilities/logger';
@@ -16,13 +17,13 @@ installConsoleCapture();
 
 function RootLayout() {
   return (
-    <SystemContextProvider>
+    <UiLanguageProvider><SystemContextProvider>
       <LanguageModelProvider>
         <ChatContextProvider>
           <RootLayoutContent />
         </ChatContextProvider>
       </LanguageModelProvider>
-    </SystemContextProvider>
+    </SystemContextProvider></UiLanguageProvider>
   );
 }
 
