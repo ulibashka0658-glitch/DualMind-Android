@@ -1,8 +1,10 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import { useSystem } from "@/context";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
 function SystemSettingsGroup() {
   const { colorScheme, systemPrompt, setSystemPrompt } = useSystem();
+  const { language } = useUiLanguage();
 
   const styles = StyleSheet.create({
     view: {
@@ -36,11 +38,11 @@ function SystemSettingsGroup() {
       <Text
         style={styles.title}
       >
-        System Settings
+        {translateUi(language,"Системные настройки","System Settings")}
       </Text>
       <TextInput
         style={styles.input}
-        placeholder="System Prompt"
+        placeholder={translateUi(language,"Системная инструкция","System Prompt")}
         placeholderTextColor={colorScheme.onSurface}
         value={systemPrompt}
         onChangeText={setSystemPrompt}
