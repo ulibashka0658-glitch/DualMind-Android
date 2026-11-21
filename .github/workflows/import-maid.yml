@@ -15,6 +15,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Print runner diagnostics
+        run: |
+          echo "Runner: $(uname -a)"
+          echo "Commit: $GITHUB_SHA"
+          git remote -v
+          git branch --show-current
       - name: Download and validate upstream
         shell: bash
         run: |
@@ -81,3 +87,4 @@ jobs:
           git add -A
           git commit -m 'Import MIT Maid foundation and Android build workflow'
           git push origin HEAD:refs/heads/maid-base
+          git ls-remote --exit-code --heads origin maid-base
