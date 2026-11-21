@@ -1,0 +1,100 @@
+/**
+ * DualMind control protocol, v1.
+ *
+ * Pure validation and redaction helpers. This module does NOT expose a server,
+ * execute commands, or grant access to the phone. An authenticated transport
+ * and explicit user consent must be added before any remote control is enabled.
+ */
+export type ControlAction =
+  | 'status.read'
+  | 'diagnostics.read'
+  | 'models.list'
+  | 'models.select'
+  | 'tasks.list'
+  | 'tasks.cancel';
+
+export type ControlCommand = {
+  version: 1;
+  id: string;
+  action: ControlAction;
+  params?: Record<string, unknown>;
+};
+
+export type ControlResult = {
+  version: 1;
+  id: string;
+  ok: boolean;
+  timestamp: string;
+  data?: unknown;
+  error?: string;
+};
+
+const allowedActions = new Set<ControlAction>([
+  'status.read',
+  'diagnostics.read',
+  'models.list',
+  'models.select',
+  'tasks.list',
+  'tasks.cancel',
+]);
+
+const sensitiveKey = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|password|secret|credential|cookie|private[_-]?key)/i;
+const bearerToken = /\bBearer\s+[^\s"',;]+/gi;
+const apiKeyValue = /\b(sk-[a-zA-Z0-9_-]{8,})\b/g;
+
+export function redactDiagnostics(value: unknown, depth = 0): unknown {
+  if (depth > 12) return '[truncated]';
+  if (typeof value === 'string') {
+    return value.replace(bearerToken, 'Bearer [REDACTED]').replace(apiKeyValue, '[REDACTED]');
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 200).map(item => redactDiagnostics(item, depth + 1));
+  }
+  if (value && typeof value === 'object') {
+    const safe: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value).slice(0, 200)) {
+      safe[key] = sensitiveKey.test(key) ? '[REDACTED]' : redactDiagnostics(item, depth + 1);
+    }
+    return safe;
+  }
+  return value;
+}
+
+export function parseControlCommand(input: unknown): ControlCommand {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Invalid control command');
+  }
+  const cmd = input as Record<string, unknown>;
+  if (cmd.version !== 1 || typeof cmd.id !== 'string' ||
+      !/^[a-zA-Z0-9_-]{8,80}$/.test(cmd.id) ||
+      typeof cmd.action !== 'string' ||
+      !allowedActions.has(cmd.action as ControlAction)) {
+    throw new Error('Unsupported control command');
+  }
+  if (cmd.params !== undefined &&
+      (!cmd.params || typeof cmd.params !== 'object' || Array.isArray(cmd.params))) {
+    throw new Error('Invalid command parameters');
+  }
+  const params = cmd.params as Record<string, unknown> | undefined;
+  if (params && JSON.stringify(params).length > 8192) {
+    throw new Error('Command parameters too large');
+  }
+  if (cmd.action === 'models.select' &&
+      (typeof params?.modelId !== 'string' || params.modelId.length > 256)) {
+    throw new Error('Missing modelId');
+  }
+  if (cmd.action === 'tasks.cancel' &&
+      (typeof params?.taskId !== 'string' || params.taskId.length > 256)) {
+    throw new Error('Missing taskId');
+  }
+  return {
+    version: 1,
+    id: cmd.id,
+    action: cmd.action as ControlAction,
+    ...(params ? { params } : {}),
+  };
+}
+
+export function requiresUserConfirmation(action: ControlAction): boolean {
+  return action === 'models.select' || action === 'tasks.cancel';
+}
