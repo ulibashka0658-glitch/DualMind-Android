@@ -15,6 +15,7 @@ const CONNECT_DELAY = 300;
 // The connected client of the selected provider and what it has reported.
 interface Session {
   definition: LanguageModelDefinition;
+  connection: string;
   client: LanguageModelClient;
   models: Array<string>;
   vision: Record<string, boolean>;
@@ -61,12 +62,11 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
   const [session, setSession] = useState<Session | undefined>(undefined);
   const [connecting, setConnecting] = useState<boolean>(false);
   const [prompting, setPrompting] = useState<boolean>(false);
+  const activePrompt = useRef<Promise<void> | undefined>(undefined);
   const stopRef = useRef<boolean>(false);
   // Settles once the previous client has been released.
   const releasedRef = useRef<Promise<void>>(Promise.resolve());
 
-  const current = session?.definition === definition ? session : undefined;
-  const client = current?.client;
 
   const has = (setting: LanguageModelSetting) => definition.settings.includes(setting);
 
@@ -75,8 +75,12 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
     ? JSON.stringify(definition.connectWith.map((setting) => values[setting]))
     : undefined;
 
+  const current = session?.definition === definition && session.connection === connection ? session : undefined;
+  const client = current?.client;
+
   useEffect(() => {
     if (connection === undefined) return;
+    setConnecting(true);
 
     let cancelled = false;
     let connected: LanguageModelClient | undefined;
@@ -97,7 +101,7 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
 
         connected = result;
         if (result) {
-          setSession({ definition, client: result, models: [], vision: {} });
+          setSession({ definition, connection, client: result, models: [], vision: {} });
         }
       })()
         .catch((error) => console.error(`Error connecting to ${type}:`, error))
@@ -111,8 +115,17 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
       clearTimeout(timeout);
       setSession(undefined);
       setConnecting(false);
+      const pendingPrompt = activePrompt.current;
+      stopRef.current = true;
       releasedRef.current = releasedRef.current
-        .then(() => connected?.release?.())
+        .then(async () => {
+          if (pendingPrompt) {
+            try { await connected?.stop?.(); }
+            catch (error) { console.error("Error stopping before release:", error); }
+            await pendingPrompt;
+          }
+          await connected?.release?.();
+        })
         .catch((error) => console.error(`Error releasing ${type}:`, error));
     };
   }, [definition, connection]);
@@ -155,7 +168,7 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
       return;
     }
 
-    if (prompting) {
+    if (activePrompt.current || connecting) {
       console.warn("Prompt already in progress");
       return;
     }
@@ -163,6 +176,8 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
     stopRef.current = false;
     setPrompting(true);
 
+    let finishPrompt!: () => void;
+    activePrompt.current = new Promise<void>(resolve => { finishPrompt = resolve; });
     try {
       await client.prompt({
         model: model ?? "",
@@ -175,6 +190,8 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
     } catch (error) {
       console.error(`Error prompting ${type}:`, error);
     } finally {
+      activePrompt.current = undefined;
+      finishPrompt();
       setPrompting(false);
     }
   };
@@ -193,7 +210,7 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
     type,
     setType,
     ready: !!client && (!has("model") || !!model),
-    busy: connecting || prompting,
+    busy: connecting || prompting || (!!session && !current),
     imagesSupported,
     parameters: values.parameters,
     setParameters: settings.setParameters,
