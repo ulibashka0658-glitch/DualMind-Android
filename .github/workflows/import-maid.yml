@@ -35,6 +35,40 @@ jobs:
           git clean -fdx >/dev/null
           tar -C /tmp/maid-upstream --exclude=.git -cf - . | tar -xf -
           printf '\nDualMind foundation: derived from Mobile-Artificial-Intelligence/maid (MIT).\nOriginal license and notices retained.\n' >> README.md
+          mkdir -p .github/workflows
+          cat > .github/workflows/dualmind-maid-android.yml <<'WORKFLOW'
+          name: Build DualMind Maid Android
+          on:
+            push:
+              branches: [maid-base]
+            workflow_dispatch:
+          permissions:
+            contents: read
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              timeout-minutes: 60
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: '20'
+                    cache: yarn
+                - uses: actions/setup-java@v4
+                  with:
+                    distribution: temurin
+                    java-version: '17'
+                - uses: android-actions/setup-android@v3
+                - name: Install dependencies
+                  run: yarn install --frozen-lockfile
+                - name: Build Android
+                  run: yarn build-android
+                - uses: actions/upload-artifact@v4
+                  with:
+                    name: DualMind-Maid-APK
+                    path: android/app/build/outputs/apk/**/*.apk
+                    if-no-files-found: error
+          WORKFLOW
           git add -A
           git commit -m "Import MIT-licensed Maid Android foundation for DualMind"
           git push origin HEAD:refs/heads/maid-base
