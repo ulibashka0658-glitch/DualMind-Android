@@ -24,7 +24,7 @@ function PromptInputField({ promptText, setPromptText }: PromptInputFieldProps) 
     <TextInput
       testID="prompt-input"
       style={styles.input}
-      placeholder="Type a message..."
+      placeholder="Введите сообщение..."
       placeholderTextColor={colorScheme.onSurface}
       underlineColorAndroid="transparent"
       multiline
