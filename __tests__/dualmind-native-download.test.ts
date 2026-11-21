@@ -4,7 +4,7 @@ import { NativeModules, Platform } from "react-native";
 jest.mock("react-native", () => ({
   Platform: { OS: "android" },
   NativeModules: { DualMindDownload: {
-    enqueue: jest.fn(), query: jest.fn(), tracked: jest.fn(), cancel: jest.fn(),
+    enqueue: jest.fn(), query: jest.fn(), tracked: jest.fn(), cancel: jest.fn(), importCompleted: jest.fn(),
   }},
 }));
 
@@ -62,5 +62,22 @@ describe("native download bridge", () => {
     } finally {
       NativeModules.DualMindDownload = module;
     }
+  });
+});
+
+describe("completed model import", () => {
+  const module = NativeModules.DualMindDownload;
+  it("returns the imported local model URI", async () => {
+    module.importCompleted.mockResolvedValueOnce("file:///data/user/0/app/files/42.gguf");
+    await expect(nativeDownloads.importCompleted("model")).resolves.toBe("file:///data/user/0/app/files/42.gguf");
+    expect(module.importCompleted).toHaveBeenCalledWith("model");
+  });
+  test.each([null, "", "content://downloads/42", "file:///model.part"])("rejects invalid imported URI %s", async uri => {
+    module.importCompleted.mockResolvedValueOnce(uri);
+    await expect(nativeDownloads.importCompleted("model")).rejects.toThrow("Invalid imported model URI");
+  });
+  it("propagates import failures", async () => {
+    module.importCompleted.mockRejectedValueOnce(new Error("Insufficient storage"));
+    await expect(nativeDownloads.importCompleted("model")).rejects.toThrow("Insufficient storage");
   });
 });
