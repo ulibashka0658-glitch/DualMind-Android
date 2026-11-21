@@ -10,6 +10,20 @@ import * as Crypto from "expo-crypto";
 import { createControlDispatcher } from "@/utils/dualmind-control-dispatcher";
 import { redactDiagnostics } from "@/utils/dualmind-control-protocol";
 
+function performanceSummary(logs: ReturnType<typeof getLogs>) {
+  return logs.flatMap(entry => {
+    const match = /^\[DualMind performance\] (metadata|load|generate|stop|release) (\{.*\})$/.exec(entry.message);
+    if (!match) return [];
+    try {
+      const value = JSON.parse(match[2]);
+      if (!Number.isFinite(value.durationMs) || value.durationMs < 0 || typeof value.success !== "boolean") return [];
+      return [{ operation: match[1], durationMs: value.durationMs, success: value.success, time: entry.time }];
+    } catch {
+      return [];
+    }
+  }).slice(-20);
+}
+
 /**
  * Local-only diagnostic snapshot. No remote telemetry or background upload.
  * Sharing requires a user tap and Android's native share confirmation.
@@ -45,7 +59,7 @@ export default function DiagnosticsSettingsGroup() {
       // Only read actions are wired here. Mutation handlers fail closed until their dedicated integration stages.
       const dispatcher = createControlDispatcher({
         status: modelStatus,
-        diagnostics: () => ({ modelStatus: modelStatus(), logCount: getLogs().length, remoteControlConnected: false }),
+        diagnostics: () => ({ modelStatus: modelStatus(), logCount: getLogs().length, performance: performanceSummary(getLogs()), remoteControlConnected: false }),
         models: availableModels,
         tasks: () => [],
         selectModel: () => { throw new Error("Not enabled"); },
@@ -224,6 +238,7 @@ export default function DiagnosticsSettingsGroup() {
         interfaceLanguage: language,
         modelStatus: modelStatus(),
         network: network ? { type: network.type, connected: network.isConnected ?? null, internetReachable: network.isInternetReachable ?? null } : null,
+        performance: performanceSummary(logs),
         logSummary: { total: logs.length, warnings: logs.filter(e => e.level === "warn").length, errors: logs.filter(e => e.level === "error").length },
         remoteControlConnected: false,
       });
