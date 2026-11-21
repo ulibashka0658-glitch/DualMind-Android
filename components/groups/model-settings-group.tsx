@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import FindOllamaButton from "@/components/buttons/find-ollama-button";
 import ModelFileButtons from "@/components/buttons/model-file-buttons";
 import ApiDropdown from "@/components/dropdowns/api-dropdown";
@@ -12,6 +13,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 function ModelSettingsGroup() {
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
   const styles = StyleSheet.create({
     view: {
@@ -29,7 +31,7 @@ function ModelSettingsGroup() {
 
   return (
     <View style={styles.view}>
-      <Text style={styles.title}>Model Settings</Text>
+      <Text style={styles.title}>{translateUi(language,"Настройки моделей","Model Settings")}</Text>
       <VoiceDropdown />
       <ApiDropdown />
       <ModelDropdown />
