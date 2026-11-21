@@ -1,0 +1,48 @@
+name: Import Maid foundation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/import-maid.yml'
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Fetch upstream Maid
+        run: |
+          git clone --depth 1 https://github.com/Mobile-Artificial-Intelligence/maid.git /tmp/maid-upstream
+          test -f /tmp/maid-upstream/LICENSE
+          test -f /tmp/maid-upstream/package.json
+      - name: Create isolated Maid foundation branch
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin maid-base >/dev/null; then
+            echo "maid-base already exists; refusing to overwrite it"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan maid-base
+          git rm -rf --ignore-unmatch . >/dev/null
+          git clean -fdx >/dev/null
+          cp -a /tmp/maid-upstream/. .
+          rm -rf .git
+          git init -q
+          git checkout -qb maid-base
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          printf '\nDualMind foundation: derived from Mobile-Artificial-Intelligence/maid (MIT).\nOriginal license and notices retained.\n' >> README.md
+          git add -A
+          git commit -m "Import MIT-licensed Maid Android foundation for DualMind"
+          git push origin maid-base
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
