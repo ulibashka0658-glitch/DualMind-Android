@@ -84,6 +84,7 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => ({
     // Keeps the release signing, ABI splits and version code logic reproducible
     // across `expo prebuild --clean`.
     "./plugins/maid-android",
+    "./plugins/dualmind-download.js",
   ],
 
   experiments: {
