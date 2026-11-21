@@ -1,9 +1,11 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import { useLLM, useSystem } from "@/context";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 function ModelFileButtons() {
   const { modelKey, pickModelFile, projectorKey, pickProjectorFile } = useLLM();
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
   const styles = StyleSheet.create({
     view: {
@@ -32,13 +34,13 @@ function ModelFileButtons() {
       <TouchableOpacity
         onPress={pickModelFile}
       >
-        <Text style={styles.button}>Load Model</Text>
+        <Text style={styles.button}>{translateUi(language,"Загрузить модель","Load Model")}</Text>
       </TouchableOpacity>
       {projectorKey && <Text style={styles.label}>{projectorKey}</Text>}
       <TouchableOpacity
         onPress={pickProjectorFile}
       >
-        <Text style={styles.button}>Load Projector</Text>
+        <Text style={styles.button}>{translateUi(language,"Загрузить проектор","Load Projector")}</Text>
       </TouchableOpacity>
     </View>
   );
