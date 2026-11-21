@@ -57,3 +57,32 @@ test("provider excludes concurrent prompts and releases only after generation se
   hook.unmount();
   await act(async () => {});
 });
+
+test("failed native release prevents further connections until provider restart", async () => {
+  const errorLog = jest.spyOn(console, "error").mockImplementation(() => {});
+  const first = { prompt: jest.fn(async () => {}), release: jest.fn(async () => { throw new Error("release failure"); }) };
+  mockConnect.mockResolvedValue(first);
+  const hook = renderHook(() => useLLM(), { wrapper: LanguageModelProvider });
+  try {
+    await act(async () => {});
+    await tick();
+    expect(hook.result.current.ready).toBe(true);
+    mockKey = "b";
+    hook.rerender({});
+    await tick();
+    expect(first.release).toHaveBeenCalledTimes(1);
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.ready).toBe(false);
+    expect(hook.result.current.busy).toBe(false);
+    mockKey = "c";
+    hook.rerender({});
+    await tick();
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.ready).toBe(false);
+    expect(errorLog).toHaveBeenCalled();
+  } finally {
+    hook.unmount();
+    await act(async () => {});
+    errorLog.mockRestore();
+  }
+});
