@@ -19,6 +19,8 @@ interface HuggingfaceModel {
 
 const HuggingfaceModels = HuggingfaceModelsRaw as Array<HuggingfaceModel>;
 
+const activeTransfers = new Set<string>();
+
 function ModelDownload({ source }: { source: HuggingfaceModel }) {
   const { modelFiles, setModelFiles, modelKey, setModelKey, projectorFiles, setProjectorFiles, projectorKey, setProjectorKey } = useLLM();
   const { colorScheme } = useSystem();
@@ -63,12 +65,14 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
   const downloadModel = async () => {
     if (downloaded) return;
 
-    if (activeKeyRef.current) return;
+    if (activeKeyRef.current || activeTransfers.has(modelFilePath) || (projectorFilePath && activeTransfers.has(projectorFilePath))) return;
     if (!FileSystem.documentDirectory || !modelFileName || !setModelFiles || !setModelKey) {
       Alert.alert("Ошибка загрузки / Download error", "Model storage unavailable");
       return;
     }
     activeKeyRef.current = currentKey;
+    activeTransfers.add(modelFilePath);
+    if (projectorFilePath) activeTransfers.add(projectorFilePath);
     setIsDownloading(true);
     try {
       const transfer = async (url: string, path: string, update: (p: FileSystem.DownloadProgressData) => void, projector = false) => {
@@ -104,6 +108,8 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
       downloadRef.current = null;
       projectorDownloadRef.current = null;
       activeKeyRef.current = null;
+      activeTransfers.delete(modelFilePath);
+      if (projectorFilePath) activeTransfers.delete(projectorFilePath);
       if (mountedRef.current) {
         setIsDownloading(false);
         setProgress(undefined);
@@ -170,27 +176,24 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
   };
 
   useEffect(() => {
+    let alive = true;
     const loadTag = async () => {
       try {
         const storedTag = await AsyncStorage.getItem(`model-${id}-selected-tag`);
-        if (storedTag && tags[storedTag]) setTag(storedTag);
+        if (alive && storedTag && tags[storedTag] && !activeKeyRef.current) setTag(storedTag);
       } catch (error) {
         console.error("Error loading selected tag:", error);
       }
     };
-    loadTag();
+    void loadTag();
+    return () => { alive = false; };
   }, [id, tags]);
 
-  useEffect(() => {
-    const saveTag = async () => {
-      try {
-        await AsyncStorage.setItem(`model-${id}-selected-tag`, tag);
-      } catch (error) {
-        console.error("Error saving selected tag:", error);
-      }
-    };
-    saveTag();
-  }, [id, tag]);
+  const chooseTag = (value: string) => {
+    if (activeKeyRef.current) return;
+    setTag(value);
+    void AsyncStorage.setItem(`model-${id}-selected-tag`, value).catch(error => console.error("Error saving selected tag:", error));
+  };
 
   const styles = StyleSheet.create({
     view: {
@@ -250,7 +253,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         <Dropdown
           items={Object.keys(tags).map((key) => ({ label: key, value: key }))}
           selectedValue={tag}
-          onValueChange={value => { if (!activeKeyRef.current) setTag(value); }}
+          onValueChange={chooseTag}
         />
       </View>
 
