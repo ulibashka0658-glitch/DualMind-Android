@@ -180,7 +180,10 @@ class MainActivity : Activity() {
             val status = conn.responseCode
             val raw = (if (status in 200..299) conn.inputStream else conn.errorStream)
                 ?.bufferedReader()?.use { it.readText() } ?: ""
-            if (status !in 200..299) throw IllegalStateException("HTTP $status: ${JSONObject(raw).optJSONObject("error")?.optString("message") ?: "Ошибка провайдера"}")
+            if (status !in 200..299) {
+                val message = try { JSONObject(raw).optJSONObject("error")?.optString("message") ?: "Ошибка провайдера" } catch (_: Exception) { "Ошибка провайдера" }
+                throw IllegalStateException("HTTP $status: $message")
+            }
             val data = JSONObject(raw)
             val answer = if (provider == 1) {
                 val content = data.getJSONArray("content")
