@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.graphics.Color
 import android.view.View
 import android.widget.*
+import android.view.inputmethod.InputMethodManager
+import android.content.Context
 import android.text.method.ScrollingMovementMethod
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,6 +25,7 @@ class MainActivity : Activity() {
     private lateinit var provider: Spinner
     private lateinit var send: Button
     private val history = JSONArray()
+    private var activeProvider = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +53,12 @@ class MainActivity : Activity() {
         val names = listOf("OpenAI GPT", "Anthropic Claude", "Compatible API / local server")
         provider.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
         root.addView(provider)
+        val providerHint = TextView(this).apply {
+            text = "Облако • GPT / Claude  |  Свой HTTPS API"
+            setTextColor(Color.rgb(153, 174, 204))
+            textSize = 12f
+        }
+        root.addView(providerHint)
         model = field("Model", "gpt-4o-mini")
         root.addView(model)
         key = field("API key (not saved)")
@@ -57,6 +66,24 @@ class MainActivity : Activity() {
         root.addView(key)
         endpoint = field("Compatible API base URL, e.g. https://host/v1")
         root.addView(endpoint)
+        provider.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (position != activeProvider) {
+                    activeProvider = position
+                    model.setText(when(position) {
+                        0 -> "gpt-4o-mini"
+                        1 -> "claude-3-5-haiku-latest"
+                        else -> "local-model"
+                    })
+                    endpoint.visibility = if (position == 2) View.VISIBLE else View.GONE
+                    key.hint = if (position == 2) "API key (optional for local server)" else "API key (not saved)"
+                    history.clear()
+                    output.text = "Модель переключена. История текущего диалога очищена."
+                }
+            }
+        }
+        endpoint.visibility = View.GONE
         instructions = field("System instructions", "Отвечай прямо, без лишних предупреждений.")
         root.addView(instructions)
         output = TextView(this).apply {
@@ -73,6 +100,12 @@ class MainActivity : Activity() {
         root.addView(prompt)
         send = Button(this).apply { text = "Отправить" }
         root.addView(send)
+        val clear = Button(this).apply { text = "Новый чат" }
+        root.addView(clear)
+        clear.setOnClickListener {
+            history.clear()
+            output.text = "Новый чат. Выбери модель и отправь сообщение."
+        }
         setContentView(root)
         send.setOnClickListener { submit() }
     }
