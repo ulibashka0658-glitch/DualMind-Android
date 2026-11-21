@@ -78,7 +78,7 @@ class MainActivity : Activity() {
                     })
                     endpoint.visibility = if (position == 2) View.VISIBLE else View.GONE
                     key.hint = if (position == 2) "API key (optional for local server)" else "API key (not saved)"
-                    history.clear()
+                    while (history.length() > 0) history.remove(history.length() - 1)
                     output.text = "Модель переключена. История текущего диалога очищена."
                 }
             }
@@ -103,7 +103,7 @@ class MainActivity : Activity() {
         val clear = Button(this).apply { text = "Новый чат" }
         root.addView(clear)
         clear.setOnClickListener {
-            history.clear()
+            while (history.length() > 0) history.remove(history.length() - 1)
             output.text = "Новый чат. Выбери модель и отправь сообщение."
         }
         setContentView(root)
