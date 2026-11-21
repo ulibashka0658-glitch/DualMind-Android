@@ -99,3 +99,5 @@ jobs:
           git commit -m 'Import MIT Maid foundation and Android build workflow'
           git push origin HEAD:refs/heads/maid-base
           git ls-remote --exit-code --heads origin maid-base
+          # A GITHUB_TOKEN push does not trigger another push workflow.
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/dualmind-maid-android.yml/dispatches" -f ref=maid-base
