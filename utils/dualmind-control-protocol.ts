@@ -42,22 +42,35 @@ const sensitiveKey = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authoriz
 const bearerToken = /\bBearer\s+[^\s"',;]+/gi;
 const apiKeyValue = /\b(sk-[a-zA-Z0-9_-]{8,})\b/g;
 
-export function redactDiagnostics(value: unknown, depth = 0): unknown {
-  if (depth > 12) return '[truncated]';
-  if (typeof value === 'string') {
-    return value.replace(bearerToken, 'Bearer [REDACTED]').replace(apiKeyValue, '[REDACTED]');
-  }
-  if (Array.isArray(value)) {
-    return value.slice(0, 200).map(item => redactDiagnostics(item, depth + 1));
-  }
-  if (value && typeof value === 'object') {
-    const safe: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value).slice(0, 200)) {
-      safe[key] = sensitiveKey.test(key) ? '[REDACTED]' : redactDiagnostics(item, depth + 1);
+export function redactDiagnostics(value: unknown): unknown {
+  // A single shared WeakSet prevents infinite recursion on circular structures.
+  const visited = new WeakSet<object>();
+  const sanitize = (input: unknown, depth: number): unknown => {
+    if (depth > 12) return '[truncated]';
+    if (typeof input === 'string') {
+      return input.slice(0, 8192)
+        .replace(bearerToken, 'Bearer [REDACTED]')
+        .replace(apiKeyValue, '[REDACTED]')
+        .replace(urlCredential, '$1[REDACTED]')
+        .replace(assignmentSecret, '$1$2[REDACTED]');
     }
-    return safe;
-  }
-  return value;
+    if (Array.isArray(input)) {
+      if (visited.has(input)) return '[circular]';
+      visited.add(input);
+      return input.slice(0, 200).map(item => sanitize(item, depth + 1));
+    }
+    if (input && typeof input === 'object') {
+      if (visited.has(input)) return '[circular]';
+      visited.add(input);
+      const safe: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(input).slice(0, 200)) {
+        safe[key] = sensitiveKey.test(key) ? '[REDACTED]' : sanitize(item, depth + 1);
+      }
+      return safe;
+    }
+    return input;
+  };
+  return sanitize(value, 0);
 }
 
 export function parseControlCommand(input: unknown): ControlCommand {
@@ -76,7 +89,10 @@ export function parseControlCommand(input: unknown): ControlCommand {
     throw new Error('Invalid command parameters');
   }
   const params = cmd.params as Record<string, unknown> | undefined;
-  if (params && JSON.stringify(params).length > 8192) {
+  let paramsSize = 0;
+  try { paramsSize = params ? JSON.stringify(params).length : 0; }
+  catch { throw new Error('Invalid command parameters'); }
+  if (paramsSize > 8192) {
     throw new Error('Command parameters too large');
   }
   if (cmd.action === 'models.select' &&
