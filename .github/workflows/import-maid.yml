@@ -33,16 +33,10 @@ jobs:
           git switch --orphan maid-base
           git rm -rf --ignore-unmatch . >/dev/null
           git clean -fdx >/dev/null
-          cp -a /tmp/maid-upstream/. .
-          rm -rf .git
-          git init -q
-          git checkout -qb maid-base
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          tar -C /tmp/maid-upstream --exclude=.git -cf - . | tar -xf -
           printf '\nDualMind foundation: derived from Mobile-Artificial-Intelligence/maid (MIT).\nOriginal license and notices retained.\n' >> README.md
           git add -A
           git commit -m "Import MIT-licensed Maid Android foundation for DualMind"
-          git push origin maid-base
+          git push origin HEAD:refs/heads/maid-base
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
