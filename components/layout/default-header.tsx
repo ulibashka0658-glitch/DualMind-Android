@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import { MaterialIconButton } from "@/components/buttons/icon-button";
 import { useSystem } from "@/context";
 import { type NativeStackHeaderProps } from "expo-router";
@@ -6,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function DefaultHeader(props: NativeStackHeaderProps) {
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
   const insets = useSafeAreaInsets();
 
   const styles = StyleSheet.create({
@@ -41,7 +43,9 @@ function DefaultHeader(props: NativeStackHeaderProps) {
 
     name = name.charAt(0).toUpperCase() + name.slice(1);
 
-    return name;
+    const names: Record<string, [string,string]> = {settings:["Настройки","Settings"],download:["Загрузка","Download"],about:["О приложении","About"],chat:["Чат","Chat"]};
+    const translated = names[name.toLowerCase()];
+    return translated ? translateUi(language,translated[0],translated[1]) : name;
   }
 
   return (
