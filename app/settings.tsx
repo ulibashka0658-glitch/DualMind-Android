@@ -1,3 +1,4 @@
+import LanguageSettingsGroup from "@/components/groups/language-settings-group";
 import ClearButtons from "@/components/buttons/clear-buttons";
 import AssistantSettingsGroup from "@/components/groups/assistant-settings-group";
 import ModelSettingsGroup from "@/components/groups/model-settings-group";
@@ -40,6 +41,8 @@ function Settings() {
       contentContainerStyle={styles.content}
       bottomOffset={16}
     >
+      <LanguageSettingsGroup />
+      <View style={styles.divider} />
       <ModelSettingsGroup />
       <View style={styles.divider} />
       <UserSettingsGroup />
