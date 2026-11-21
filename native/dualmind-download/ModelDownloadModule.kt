@@ -40,6 +40,24 @@ class ModelDownloadModule(context: ReactApplicationContext) : ReactContextBaseJa
         }
     }
 
+    private val importExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    @ReactMethod
+    fun importCompleted(key: String, promise: Promise) {
+        try {
+            importExecutor.execute {
+                respond(promise) { store.importCompleted(key) }
+            }
+        } catch (error: Exception) {
+            promise.reject("IMPORT_ERROR", "Unable to schedule model import", error)
+        }
+    }
+
+    override fun invalidate() {
+        importExecutor.shutdown()
+        super.invalidate()
+    }
+
     @ReactMethod
     fun tracked(promise: Promise) = respond(promise) {
         Arguments.createMap().apply {
