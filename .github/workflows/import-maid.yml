@@ -44,61 +44,11 @@ jobs:
           git clean -fdx >/dev/null
           tar -C /tmp/maid-upstream --exclude=.git -cf - . | tar -xf -
           printf '\nDualMind foundation derived from Mobile-Artificial-Intelligence/maid (MIT). Original license retained.\n' >> README.md
-          mkdir -p .github/workflows
-          python3 - <<'PY'
-          from pathlib import Path
-          from textwrap import dedent
-          Path('.github/workflows/dualmind-maid-android.yml').write_text(dedent("""\n          name: Build DualMind Maid Android
-          on:
-            push:
-              branches: [maid-base]
-            workflow_dispatch:
-          permissions:
-            contents: read
-          jobs:
-            build:
-              runs-on: ubuntu-latest
-              timeout-minutes: 90
-              steps:
-                - uses: actions/checkout@v4
-                - uses: actions/setup-node@v4
-                  with:
-                    node-version: '22'
-                    cache: yarn
-                - uses: actions/setup-java@v4
-                  with:
-                    distribution: temurin
-                    java-version: '17'
-                - uses: android-actions/setup-android@v3
-                - name: Install dependencies
-                  run: yarn install --frozen-lockfile
-                - name: Generate Android native project
-                  run: npx expo prebuild --platform android --no-install --clean
-                - name: Build debug APK
-                  shell: bash
-                  run: |
-                    set -o pipefail
-                    cd android
-                    chmod +x gradlew
-                    ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee ../android-build.log
-                - name: Upload build failure diagnostics
-                  if: failure()
-                  uses: actions/upload-artifact@v4
-                  with:
-                    name: DualMind-Maid-build-diagnostics
-                    path: android-build.log
-                    if-no-files-found: warn
-                - uses: actions/upload-artifact@v4
-                  if: success()
-                  with:
-                    name: DualMind-Maid-debug-APK
-                    path: android/app/build/outputs/apk/debug/*.apk
-                    if-no-files-found: error
-          """).lstrip())
-          PY
+          # GitHub's token cannot create or update workflow files without workflows permission.
+          # Import application source only; configure build workflows separately.
+          rm -rf .github/workflows
           git add -A
           git commit -m 'Import MIT Maid foundation and Android build workflow'
           git push origin HEAD:refs/heads/maid-base
           git ls-remote --exit-code --heads origin maid-base
           # A GITHUB_TOKEN push does not trigger another push workflow.
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/dualmind-maid-android.yml/dispatches" -f ref=maid-base
