@@ -12,6 +12,20 @@ const TYPE_STORAGE_KEY = "language-model-type";
 // before building a client from them.
 const CONNECT_DELAY = 300;
 
+// Watchdog only reports slow cleanup; it must never unlock native ownership.
+const RELEASE_WARNING_MS = 15000;
+async function watchCleanup(run: () => Promise<void>) {
+  const timer = setTimeout(() => {
+    console.warn("DualMind: model cleanup is taking longer than 15 seconds; waiting for safe release");
+  }, RELEASE_WARNING_MS);
+  try {
+    await run();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
 // The connected client of the selected provider and what it has reported.
 interface Session {
   definition: LanguageModelDefinition;
@@ -122,14 +136,14 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
       const pendingPrompt = activePrompt.current;
       stopRef.current = true;
       releasedRef.current = releasedRef.current
-        .then(async () => {
+        .then(() => watchCleanup(async () => {
           if (pendingPrompt) {
             try { await connected?.stop?.(); }
             catch (error) { console.error("Error stopping before release:", error); }
             await pendingPrompt;
           }
           await connected?.release?.();
-        })
+        }))
         .catch((error) => {
           releaseFailed.current = true;
           console.error(`Error releasing ${type}:`, error);
