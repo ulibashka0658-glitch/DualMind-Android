@@ -5,8 +5,6 @@ import android.os.Bundle
 import android.graphics.Color
 import android.view.View
 import android.widget.*
-import android.view.inputmethod.InputMethodManager
-import android.content.Context
 import android.text.method.ScrollingMovementMethod
 import org.json.JSONArray
 import org.json.JSONObject
@@ -66,14 +64,15 @@ class MainActivity : Activity() {
         root.addView(key)
         endpoint = field("Compatible API base URL, e.g. https://host/v1")
         root.addView(endpoint)
-        provider.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+        // Install listener only after all views have been initialized.
+        val providerListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (position != activeProvider) {
                     activeProvider = position
                     model.setText(when(position) {
                         0 -> "gpt-4o-mini"
-                        1 -> "claude-3-5-haiku-latest"
+                        1 -> "claude-haiku-4-5"
                         else -> "local-model"
                     })
                     endpoint.visibility = if (position == 2) View.VISIBLE else View.GONE
@@ -107,6 +106,7 @@ class MainActivity : Activity() {
             output.text = "Новый чат. Выбери модель и отправь сообщение."
         }
         setContentView(root)
+        provider.onItemSelectedListener = providerListener
         send.setOnClickListener { submit() }
     }
 
@@ -121,6 +121,7 @@ class MainActivity : Activity() {
         if (chosenModel.isEmpty()) { output.append("\nУкажи модель."); return }
         if (selected != 2 && apiKey.isEmpty()) { output.append("\nНужен API-ключ."); return }
         send.isEnabled = false
+        provider.isEnabled = false
         output.append("\n\nТы: $question\nAI: …")
         prompt.setText("")
         executor.execute {
@@ -129,6 +130,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     output.append("\n$response")
                     send.isEnabled = true
+                    provider.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -145,7 +147,7 @@ class MainActivity : Activity() {
             1 -> "https://api.anthropic.com/v1/messages"
             else -> {
                 val b = base.trimEnd('/')
-                if (!b.startsWith("https://") && !b.startsWith("http://127.0.0.1") && !b.startsWith("http://localhost"))
+                if (!b.startsWith("https://") && !b.startsWith("http://127.0.0.1:") && !b.startsWith("http://localhost:"))
                     throw IllegalArgumentException("Используй HTTPS. HTTP разрешён только для localhost.")
                 "$b/chat/completions"
             }
@@ -178,7 +180,7 @@ class MainActivity : Activity() {
             val status = conn.responseCode
             val raw = (if (status in 200..299) conn.inputStream else conn.errorStream)
                 ?.bufferedReader()?.use { it.readText() } ?: ""
-            if (status !in 200..299) throw IllegalStateException("HTTP $status: ${raw.take(250)}")
+            if (status !in 200..299) throw IllegalStateException("HTTP $status: ${JSONObject(raw).optJSONObject("error")?.optString("message") ?: "Ошибка провайдера"}")
             val data = JSONObject(raw)
             val answer = if (provider == 1) {
                 val content = data.getJSONArray("content")
