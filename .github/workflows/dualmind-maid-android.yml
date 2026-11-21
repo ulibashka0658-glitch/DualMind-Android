@@ -1,0 +1,51 @@
+name: Build Maid Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/dualmind-maid-android.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: maid-base
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -o pipefail
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee ../android-build.log
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maid-build-diagnostics
+          path: android-build.log
+          if-no-files-found: warn
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DualMind-Maid-debug-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
