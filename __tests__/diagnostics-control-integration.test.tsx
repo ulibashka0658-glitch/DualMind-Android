@@ -19,7 +19,10 @@ jest.mock("expo-application", () => ({}));
 jest.mock("expo-device", () => ({}));
 jest.mock("expo-network", () => ({ getNetworkStateAsync: jest.fn() }));
 jest.mock("expo-crypto", () => ({ randomUUID: jest.fn(() => "local-command-" + Math.random().toString(36).slice(2)) }));
-jest.mock("@/utilities/logger", () => ({ getLogs: () => [] }));
+jest.mock("@/utilities/logger", () => ({
+  getLogs: () => [],
+  subscribeLogs: () => () => {},
+}));
 
 afterEach(() => { jest.restoreAllMocks(); mockSetModel.mockClear(); mockStop.mockClear(); mockBusy = false; mockModelKey = "actual-model"; });
 
