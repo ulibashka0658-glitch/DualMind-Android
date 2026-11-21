@@ -1,6 +1,7 @@
 import { MaterialIconButton } from "@/components/buttons/icon-button";
 import Dropdown from "@/components/dropdowns/dropdown";
 import { useLLM, useSystem } from "@/context";
+import { nativeDownloads, nativeDownloaderAvailable } from "@/utils/dualmind-native-download";
 import HuggingfaceModelsRaw from "@/models.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from 'expo-file-system/legacy';
@@ -64,6 +65,8 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
 
   const downloaded = !!modelFiles?.[currentKey] && (!projectorFileName || !!projectorFiles?.[currentKey]);
 
+  const useNative = nativeDownloaderAvailable();
+  const [nativeStatus, setNativeStatus] = useState("");
   const downloadModel = async () => {
     if (downloaded) return;
 
@@ -79,6 +82,24 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
     setIsDownloading(true);
     try {
       const transfer = async (url: string, path: string, update: (p: FileSystem.DownloadProgressData) => void, projector = false) => {
+        if (useNative) {
+          const key = JSON.stringify([currentKey, url, projector]);
+          const filename = url.slice(url.lastIndexOf("/") + 1);
+          await nativeDownloads.enqueue(key, url, filename);
+          while (true) {
+            if (!mountedRef.current) return undefined;
+            const snapshot = await nativeDownloads.query(key);
+            if (!snapshot || snapshot.state === "failed" || snapshot.state === "unknown") {
+              throw new Error("Android download failed: " + (snapshot?.reason ?? "missing record"));
+            }
+            if (mountedRef.current) {
+              update({ totalBytesWritten: snapshot.bytes, totalBytesExpectedToWrite: snapshot.total ?? 0 });
+              setNativeStatus(snapshot.state === "completed" ? "Импорт модели..." : snapshot.state === "waiting" ? "Ожидание сети..." : "");
+            }
+            if (snapshot.state === "completed") return nativeDownloads.importCompleted(key);
+            await new Promise<void>(resolve => setTimeout(resolve, 1000));
+          }
+        }
         const storageKey = `dualmind-resume:${url}:${path}`;
         const saved = await AsyncStorage.getItem(storageKey);
         const existing = await FileSystem.getInfoAsync(path);
@@ -110,7 +131,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         setProjectorKey?.(undefined);
       }
       setModelFiles(prev => ({ ...prev, [currentKey]: uri }));
-      setModelKey(currentKey);
+      if (mountedRef.current) setModelKey(currentKey);
       if (mountedRef.current) Alert.alert("Файл скачан / File downloaded", name + " " + tag);
     } catch (error) {
       console.error("Download failed:", error);
@@ -126,6 +147,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         setIsDownloading(false);
         setProgress(undefined);
         setProjectorProgress(undefined);
+        setNativeStatus("");
       }
     }
   };
@@ -295,11 +317,11 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
 
       {isDownloading && (
         <Text style={styles.name}>
-          {projectorFileName ? `Model: ${percent}%  Proj: ${projectorPercent ?? 0}%` : percent === undefined ? "Starting..." : `${percent}%`}
+          {nativeStatus || (projectorFileName ? `Model: ${percent}%  Proj: ${projectorPercent ?? 0}%` : percent === undefined ? "Starting..." : `${percent}%`)}
         </Text>
       )}
 
-      {isDownloading && progress && <TouchableOpacity onPress={pauseDownload}><Text style={styles.textButton}>Пауза</Text></TouchableOpacity>}
+      {isDownloading && !useNative && progress && <TouchableOpacity onPress={pauseDownload}><Text style={styles.textButton}>Пауза</Text></TouchableOpacity>}
 
       {!isDownloading && !downloaded && (
         <MaterialIconButton
