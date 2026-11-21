@@ -41,7 +41,8 @@ jobs:
           mkdir -p .github/workflows
           python3 - <<'PY'
           from pathlib import Path
-          Path('.github/workflows/dualmind-maid-android.yml').write_text("""name: Build DualMind Maid Android
+          from textwrap import dedent
+          Path('.github/workflows/dualmind-maid-android.yml').write_text(dedent("""\n          name: Build DualMind Maid Android
           on:
             push:
               branches: [maid-base]
@@ -75,7 +76,7 @@ jobs:
                     name: DualMind-Maid-debug-APK
                     path: android/app/build/outputs/apk/debug/*.apk
                     if-no-files-found: error
-          """)
+          """).lstrip())
           PY
           git add -A
           git commit -m 'Import MIT Maid foundation and Android build workflow'
