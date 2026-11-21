@@ -118,6 +118,7 @@ class MainActivity : Activity() {
         val chosenModel = model.text.toString().trim()
         val apiKey = key.text.toString().trim()
         val base = endpoint.text.toString().trim()
+        if (selected == 2 && base.isBlank()) { output.append("\nУкажи адрес совместимого API."); return }
         val system = instructions.text.toString()
         if (chosenModel.isEmpty()) { output.append("\nУкажи модель."); return }
         if (selected != 2 && apiKey.isEmpty()) { output.append("\nНужен API-ключ."); return }
@@ -152,11 +153,13 @@ class MainActivity : Activity() {
                 val b = base.trimEnd('/')
                 if (!b.startsWith("https://") && !b.startsWith("http://127.0.0.1:") && !b.startsWith("http://localhost:"))
                     throw IllegalArgumentException("Используй HTTPS. HTTP разрешён только для localhost.")
-                "$b/chat/completions"
+                if (b.endsWith("/chat/completions")) b else "$b/chat/completions"
             }
         }
         val messages = JSONArray()
-        for (i in 0 until history.length()) messages.put(history.getJSONObject(i))
+        synchronized(history) {
+            for (i in 0 until history.length()) messages.put(history.getJSONObject(i))
+        }
         messages.put(JSONObject().put("role", "user").put("content", question))
         val body = JSONObject().put("model", model)
         if (provider == 1) {
@@ -195,6 +198,7 @@ class MainActivity : Activity() {
                 val content = data.getJSONArray("content")
                 (0 until content.length()).mapNotNull { content.optJSONObject(it)?.optString("text") }.joinToString("\n")
             } else data.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+            if (answer.isBlank()) throw IllegalStateException("Модель вернула пустой ответ")
             synchronized(history) {
                 history.put(JSONObject().put("role", "user").put("content", question))
                 history.put(JSONObject().put("role", "assistant").put("content", answer))
