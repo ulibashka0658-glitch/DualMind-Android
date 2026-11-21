@@ -5,6 +5,8 @@ export interface ControlHandlers {
   diagnostics: () => unknown;
   models: () => readonly string[];
   selectModel: (id: string) => void | Promise<void>;
+  stopModel?: () => void | Promise<void>;
+  unloadModel?: () => void | Promise<void>;
   tasks: () => readonly string[];
   cancelTask: (id: string) => void | Promise<void>;
   confirm: (command: ControlCommand) => Promise<boolean>;
@@ -29,6 +31,13 @@ export function createControlDispatcher(handlers: ControlHandlers) {
       seen.add(id);
       busy = true;
       try {
+        if (cmd.action === "models.stop" || cmd.action === "models.unload") {
+          const handler = cmd.action === "models.stop" ? handlers.stopModel : handlers.unloadModel;
+          if (!handler) return result(false, undefined, "unsupported_action");
+          if (!await handlers.confirm(cmd)) return result(false, undefined, "user_denied");
+          await handler();
+          return result(true, { accepted: true });
+        }
         const target = cmd.action === "models.select" ? cmd.params?.modelId : cmd.params?.taskId;
         if (requiresUserConfirmation(cmd.action)) {
           if (typeof target !== "string" || !target.trim()) return result(false, undefined, "invalid_target");
