@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { DocumentPickerAsset, getDocumentAsync } from "expo-document-picker";
 import * as FileSystem from 'expo-file-system/legacy';
 import { initLlama, loadLlamaModelInfo, RNLlamaOAICompatibleMessage } from 'llama.rn';
@@ -141,7 +142,7 @@ export async function connectLlama(
 
   const llama = await initLlama({
     model: modelFile,
-    use_mlock: true,
+    use_mlock: Platform.OS !== "android",
     n_ctx,
     n_gpu_layers: 99,
     ...parameters,
