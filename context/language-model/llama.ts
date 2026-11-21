@@ -202,8 +202,16 @@ export async function connectLlama(
 
   return {
     imagesSupported,
-    prompt: async ({ messages, onUpdate }) => {
+    prompt: async ({ messages, onUpdate, parameters: sampling }) => {
+      const bounded = (key: string, fallback: number, min: number, max: number) => {
+        const value = sampling[key];
+        return typeof value === "number" && Number.isFinite(value)
+          ? Math.max(min, Math.min(max, value)) : fallback;
+      };
       const result = await measureLlama("generate", () => llama.completion({
+        temperature: bounded("temperature", 0.6, 0, 2),
+        top_p: bounded("top_p", 0.9, 0, 1),
+        top_k: Math.round(bounded("top_k", 40, 0, 200)),
         messages: withRussianLanguageHint(parseMessages(messages))
       }, (data) => onUpdate(data.token)));
 
