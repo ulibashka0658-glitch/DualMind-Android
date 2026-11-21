@@ -1,4 +1,4 @@
-name: Build Maid Android APK
+name: Build Maid Standalone Android APK
 on:
   workflow_dispatch:
   push:
@@ -36,13 +36,13 @@ jobs:
         run: yarn install --frozen-lockfile
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install --clean
-      - name: Build debug APK
+      - name: Build standalone release APK (bundled JavaScript)
         shell: bash
         run: |
           set -o pipefail
           cd android
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee ../android-build.log
+          ./gradlew --no-daemon --stacktrace assembleRelease 2>&1 | tee ../android-build.log
       - name: Upload diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -54,6 +54,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: DualMind-Maid-debug-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: DualMind-Maid-standalone-APK
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
