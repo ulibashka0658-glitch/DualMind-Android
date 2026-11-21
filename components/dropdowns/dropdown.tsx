@@ -69,7 +69,6 @@ function Dropdown<T>({
       color: colorScheme.onSurface,
       fontSize: 14,
       flexShrink: 1,
-      textOverflow: "ellipsis",
       maxWidth: 200,
     },
     caret: { 
