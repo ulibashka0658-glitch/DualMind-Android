@@ -147,24 +147,51 @@ export default function DiagnosticsSettingsGroup() {
     if (sharing.current) return;
     const initial = latestLLM.current;
     if (action === "unload" && (initial.type !== "Llama" || initial.busy || !initial.modelKey)) return;
-    if (action === "stop" && !initial.busy) return;
+    if (action === "stop" && (!initial.busy || !initial.ready)) return;
     sharing.current = true;
     setBusy(true);
     try {
-      const allowed = await new Promise<boolean>(resolve => Alert.alert(
-        t("Подтверждение", "Confirmation"),
-        action === "stop" ? t("Остановить генерацию?", "Stop generation?") : t("Выгрузить модель из памяти? Файл сохранится.", "Unload model from memory? The file will be kept."),
-        [
-          { text: t("Отмена", "Cancel"), style: "cancel", onPress: () => resolve(false) },
-          { text: t("Разрешить", "Allow"), onPress: () => resolve(true) },
-        ],
-        { cancelable: true, onDismiss: () => resolve(false) },
-      ));
-      if (!allowed) return;
-      const current = latestLLM.current;
-      if (current.type !== initial.type || current.modelKey !== initial.modelKey || current.model !== initial.model) return;
-      if (action === "stop" && current.busy) await current.stop();
-      if (action === "unload" && current.type === "Llama" && !current.busy && current.modelKey && current.setModelKey) current.setModelKey(undefined);
+      const checkedModel = () => {
+        const current = latestLLM.current;
+        if (current.type !== initial.type || current.modelKey !== initial.modelKey || current.model !== initial.model) {
+          throw new Error("Model changed");
+        }
+        return current;
+      };
+      const dispatcher = createControlDispatcher({
+        status: modelStatus,
+        diagnostics: modelStatus,
+        models: availableModels,
+        tasks: () => [],
+        selectModel: () => { throw new Error("Not enabled"); },
+        cancelTask: () => { throw new Error("Not enabled"); },
+        stopModel: async () => {
+          const current = checkedModel();
+          if (!current.busy || !current.ready) throw new Error("No active ready model");
+          await current.stop();
+        },
+        unloadModel: () => {
+          const current = checkedModel();
+          if (current.type !== "Llama" || current.busy || !current.modelKey || !current.setModelKey) {
+            throw new Error("Unload unavailable");
+          }
+          current.setModelKey(undefined);
+        },
+        confirm: () => new Promise<boolean>(resolve => Alert.alert(
+          t("Подтверждение", "Confirmation"),
+          action === "stop" ? t("Остановить генерацию?", "Stop generation?") : t("Выгрузить модель из памяти? Файл сохранится.", "Unload model from memory? The file will be kept."),
+          [
+            { text: t("Отмена", "Cancel"), style: "cancel", onPress: () => resolve(false) },
+            { text: t("Разрешить", "Allow"), onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        )),
+      });
+      const result = await dispatcher({
+        version: 1, id: Crypto.randomUUID(),
+        action: action === "stop" ? "models.stop" : "models.unload",
+      });
+      Alert.alert(t("Результат команды", "Command result"), JSON.stringify(result, null, 2));
     } catch {
       Alert.alert(t("Ошибка", "Error"), t("Не удалось выполнить действие.", "Action failed."));
     } finally {
@@ -229,7 +256,7 @@ export default function DiagnosticsSettingsGroup() {
       <Pressable accessibilityRole="button" disabled={busy} onPress={runConsentCheck} style={styles.button}>
         <Text style={styles.buttonText}>{t("Проверить подтверждение команд", "Check command confirmation")}</Text>
       </Pressable>
-      {llm.busy && (
+      {llm.busy && llm.ready && (
         <Pressable accessibilityRole="button" disabled={busy} onPress={() => runModelLifecycle("stop")} style={styles.button}>
           <Text style={styles.buttonText}>{t("Запросить остановку генерации", "Request generation stop")}</Text>
         </Pressable>
