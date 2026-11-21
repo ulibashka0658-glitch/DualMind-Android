@@ -27,6 +27,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
   const { id, name, repo, branch, tags } = source;
 
   const pauseRequested = useRef(false);
+  const pausePending = useRef<Promise<void> | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState<FileSystem.DownloadProgressData | undefined>(undefined);
   const [projectorProgress, setProjectorProgress] = useState<FileSystem.DownloadProgressData | undefined>(undefined);
@@ -82,7 +83,6 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         const saved = await AsyncStorage.getItem(storageKey);
         const existing = await FileSystem.getInfoAsync(path);
         const resumeData = saved && existing.exists && !existing.isDirectory && existing.size ? saved : undefined;
-        await AsyncStorage.removeItem(storageKey);
         const job = FileSystem.createDownloadResumable(url, path, {}, p => {
           if (mountedRef.current) update(p);
         }, resumeData);
@@ -95,6 +95,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         if (!info.exists || info.isDirectory || !info.size) throw new Error("Downloaded file missing or empty");
         const header = await FileSystem.readAsStringAsync(result.uri, { encoding: FileSystem.EncodingType.Base64, position: 0, length: 4 });
         if (header !== "R0dVRg==") throw new Error("Invalid GGUF header");
+        await AsyncStorage.removeItem(storageKey);
         return result.uri;
       };
       const uri = await transfer(modelUrl, modelFilePath, setProgress);
@@ -115,6 +116,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
       console.error("Download failed:", error);
       if (mountedRef.current) Alert.alert("Ошибка загрузки / Download error", error instanceof Error ? error.message.replace(/https?:\/\/\S+/g, "[URL]") : "Unknown error");
     } finally {
+      await pausePending.current;
       downloadRef.current = null;
       projectorDownloadRef.current = null;
       activeKeyRef.current = null;
@@ -133,6 +135,8 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
     const job = projector ?? downloadRef.current;
     if (!job || pauseRequested.current) return;
     pauseRequested.current = true;
+    let finishPause!: () => void;
+    pausePending.current = new Promise<void>(resolve => { finishPause = resolve; });
     try {
       const state = await job.pauseAsync();
       if (!state.resumeData) throw new Error("Resume data unavailable");
@@ -144,6 +148,9 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
       pauseRequested.current = false;
       console.error("Pause failed:", error);
       if (mountedRef.current) Alert.alert("Не удалось сохранить паузу");
+    } finally {
+      finishPause();
+      pausePending.current = null;
     }
   };
 
@@ -173,7 +180,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         delete updated[currentKey];
         return updated;
       });
-      setModelKey?.(undefined);
+      if (modelKey === currentKey) setModelKey?.(undefined);
 
       const existingProjector = projectorFiles?.[currentKey];
       if (existingProjector) {
@@ -183,7 +190,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
           delete updated[currentKey];
           return updated;
         });
-        setProjectorKey?.(undefined);
+        if (projectorKey === currentKey) setProjectorKey?.(undefined);
       }
     } catch (error) {
       console.error("Delete failed:", error);
