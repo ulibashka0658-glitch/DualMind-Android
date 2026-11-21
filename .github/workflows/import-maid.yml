@@ -46,7 +46,8 @@ jobs:
           printf '\nDualMind foundation derived from Mobile-Artificial-Intelligence/maid (MIT). Original license retained.\n' >> README.md
           # GitHub's token cannot create or update workflow files without workflows permission.
           # Import application source only; configure build workflows separately.
-          rm -rf .github/workflows
+          # Preserve existing workflow files byte-for-byte so the push does not modify them.
+          git restore --source=origin/maid-base --staged --worktree .github/workflows
           git add -A
           git commit -m 'Import MIT Maid foundation and Android build workflow'
           git push origin HEAD:refs/heads/maid-base
