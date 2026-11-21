@@ -29,7 +29,12 @@ export default function DiagnosticsSettingsGroup() {
     buttonText: { color: colorScheme.onPrimary, fontSize: 14, fontWeight: "600", textAlign: "center" },
   });
 
-  const modelStatus = () => ({ provider: llm.type, ready: llm.ready, busy: llm.busy, imagesSupported: llm.imagesSupported });
+  const availableModels = () => llm.type === "Llama" && llm.modelFiles ? Object.keys(llm.modelFiles) : (llm.models ?? []);
+  const modelStatus = () => ({
+    provider: llm.type, ready: llm.ready, busy: llm.busy, imagesSupported: llm.imagesSupported,
+    selectedModel: (llm.type === "Llama" ? llm.modelKey : llm.model) ?? null,
+    availableModelCount: availableModels().length,
+  });
   const runLocalCheck = async () => {
     if (sharing.current) return;
     sharing.current = true;
@@ -39,7 +44,7 @@ export default function DiagnosticsSettingsGroup() {
       const dispatcher = createControlDispatcher({
         status: modelStatus,
         diagnostics: () => ({ modelStatus: modelStatus(), logCount: getLogs().length, remoteControlConnected: false }),
-        models: () => llm.models ?? [],
+        models: availableModels,
         tasks: () => [],
         selectModel: () => { throw new Error("Not enabled"); },
         cancelTask: () => { throw new Error("Not enabled"); },
@@ -116,14 +121,7 @@ export default function DiagnosticsSettingsGroup() {
           totalMemoryBytes: Device.totalMemory ?? null,
         },
         interfaceLanguage: language,
-        modelStatus: {
-          provider: llm.type,
-          ready: llm.ready,
-          busy: llm.busy,
-          selectedModel: llm.model ?? null,
-          availableModelCount: llm.models?.length ?? 0,
-          imagesSupported: llm.imagesSupported,
-        },
+        modelStatus: modelStatus(),
         network: network ? { type: network.type, connected: network.isConnected ?? null, internetReachable: network.isInternetReachable ?? null } : null,
         logSummary: { total: logs.length, warnings: logs.filter(e => e.level === "warn").length, errors: logs.filter(e => e.level === "error").length },
         remoteControlConnected: false,
