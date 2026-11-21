@@ -58,6 +58,42 @@ export default function DiagnosticsSettingsGroup() {
     }
   };
 
+  const runConsentCheck = async () => {
+    if (sharing.current) return;
+    sharing.current = true;
+    setBusy(true);
+    try {
+      let simulated = false;
+      // A deliberately isolated fixture: never changes the real model.
+      const dispatcher = createControlDispatcher({
+        status: modelStatus,
+        diagnostics: () => ({ remoteControlConnected: false }),
+        models: () => ["local-test-model"],
+        tasks: () => [],
+        selectModel: () => { simulated = true; },
+        cancelTask: () => { throw new Error("Not enabled"); },
+        confirm: () => new Promise<boolean>(resolve => {
+          Alert.alert(
+            t("Подтверждение тестовой команды", "Confirm test command"),
+            t("Разрешить имитацию переключения модели? Реальная модель не изменится.", "Allow a simulated model selection? Your real model will not change."),
+            [
+              { text: t("Отмена", "Cancel"), style: "cancel", onPress: () => resolve(false) },
+              { text: t("Разрешить", "Allow"), onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) },
+          );
+        }),
+      });
+      const result = await dispatcher({ version: 1, id: Crypto.randomUUID(), action: "models.select", params: { modelId: "local-test-model" } });
+      Alert.alert(t("Результат теста", "Test result"), JSON.stringify({ ...result, simulated }, null, 2));
+    } catch {
+      Alert.alert(t("Ошибка", "Error"), t("Проверка не выполнена.", "Check failed."));
+    } finally {
+      sharing.current = false;
+      setBusy(false);
+    }
+  };
+
   const shareDiagnostics = async () => {
     if (sharing.current) return;
     sharing.current = true;
@@ -117,6 +153,9 @@ export default function DiagnosticsSettingsGroup() {
       </Pressable>
       <Pressable accessibilityRole="button" disabled={busy} onPress={runLocalCheck} style={styles.button}>
         <Text style={styles.buttonText}>{t("Проверить локальные команды", "Check local commands")}</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" disabled={busy} onPress={runConsentCheck} style={styles.button}>
+        <Text style={styles.buttonText}>{t("Проверить подтверждение команд", "Check command confirmation")}</Text>
       </Pressable>
     </View>
   );
