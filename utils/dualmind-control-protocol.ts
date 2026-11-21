@@ -41,6 +41,8 @@ const allowedActions = new Set<ControlAction>([
 const sensitiveKey = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|password|secret|credential|cookie|private[_-]?key)/i;
 const bearerToken = /\bBearer\s+[^\s"',;]+/gi;
 const apiKeyValue = /\b(sk-[a-zA-Z0-9_-]{8,})\b/g;
+const urlCredential = /([?&](?:api_key|apikey|access_token|token|key|secret|password)=)[^&#\s]+/gi;
+const assignmentSecret = /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\b(\s*[:=]\s*)[^\s,;]+/gi;
 
 export function redactDiagnostics(value: unknown): unknown {
   // A single shared WeakSet prevents infinite recursion on circular structures.
