@@ -86,3 +86,37 @@ test("failed native release prevents further connections until provider restart"
     errorLog.mockRestore();
   }
 });
+
+
+test("slow native release warns without allowing another model to connect", async () => {
+  const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const first = { prompt: jest.fn(async () => {}), release: jest.fn(() => pending) };
+  const second = { prompt: jest.fn(async () => {}), release: jest.fn(async () => {}) };
+  mockConnect.mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+  const hook = renderHook(() => useLLM(), { wrapper: LanguageModelProvider });
+  try {
+    await act(async () => {});
+    await tick();
+    expect(hook.result.current.ready).toBe(true);
+    mockKey = "b";
+    hook.rerender({});
+    await tick();
+    expect(first.release).toHaveBeenCalledTimes(1);
+    await act(async () => { jest.advanceTimersByTime(15000); });
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("cleanup is taking longer"));
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.ready).toBe(false);
+    expect(hook.result.current.busy).toBe(true);
+    await act(async () => { finish(); });
+    expect(mockConnect).toHaveBeenCalledTimes(2);
+    expect(hook.result.current.ready).toBe(true);
+    expect(hook.result.current.busy).toBe(false);
+  } finally {
+    await act(async () => { finish(); });
+    hook.unmount();
+    await act(async () => {});
+    warning.mockRestore();
+  }
+});
