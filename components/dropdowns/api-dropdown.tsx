@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import Dropdown from "@/components/dropdowns/dropdown";
 import { useLLM, useSystem } from "@/context";
 import { LanguageModelTypes } from "@/context/language-model";
@@ -6,6 +7,7 @@ import { StyleSheet, Text, View } from "react-native";
 function ApiDropdown() {
   const { type, setType } = useLLM();
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
   const styles = StyleSheet.create({
     view: {
@@ -30,7 +32,7 @@ function ApiDropdown() {
   return (
     <View style={styles.view}>
       <Text style={styles.title}>
-        Language Model API
+        {translateUi(language,"Источник модели","Language Model API")}
       </Text>
       <Dropdown
         items={items}
