@@ -66,6 +66,8 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
   const stopRef = useRef<boolean>(false);
   // Settles once the previous client has been released.
   const releasedRef = useRef<Promise<void>>(Promise.resolve());
+  // A failed native release leaves memory ownership uncertain. Fail closed until restart.
+  const releaseFailed = useRef(false);
 
 
   const has = (setting: LanguageModelSetting) => definition.settings.includes(setting);
@@ -92,10 +94,12 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
       releasedRef.current = (async () => {
         await released;
         if (cancelled) return;
+        if (releaseFailed.current) throw new Error("Previous model release failed; restart the app");
 
         const result = await definition.connect(values, type);
         if (cancelled) {
-          await result?.release?.();
+          try { await result?.release?.(); }
+          catch (error) { releaseFailed.current = true; throw error; }
           return;
         }
 
@@ -126,7 +130,10 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
           }
           await connected?.release?.();
         })
-        .catch((error) => console.error(`Error releasing ${type}:`, error));
+        .catch((error) => {
+          releaseFailed.current = true;
+          console.error(`Error releasing ${type}:`, error);
+        });
     };
   }, [definition, connection]);
 
