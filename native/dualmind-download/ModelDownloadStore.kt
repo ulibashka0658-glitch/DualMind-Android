@@ -72,6 +72,35 @@ class ModelDownloadStore(private val context: Context) {
         return uri.toString()
     }
 
+    @Synchronized
+    fun importCompleted(key: String): String {
+        val uri = Uri.parse(completedUri(key))
+        val id = prefs.getLong(key, -1L)
+        val snapshot = requireNotNull(query(id))
+        val directory = File(context.filesDir, "dualmind-models")
+        check(directory.isDirectory || directory.mkdirs())
+        val destination = File(directory, "$id.gguf")
+        val temporary = File(directory, "$id.gguf.part")
+        if (destination.exists()) {
+            check(destination.length() == snapshot.total) { "Existing model size mismatch" }
+            return Uri.fromFile(destination).toString()
+        }
+        try {
+            val copied = requireNotNull(context.contentResolver.openInputStream(uri)).use { input ->
+                java.io.FileOutputStream(temporary).use { output ->
+                    val count = input.copyTo(output)
+                    output.fd.sync()
+                    count
+                }
+            }
+            check(copied == snapshot.total && temporary.length() == snapshot.total) { "Incomplete model copy" }
+            check(temporary.renameTo(destination)) { "Could not finalize model file" }
+            return Uri.fromFile(destination).toString()
+        } finally {
+            if (temporary.exists()) temporary.delete()
+        }
+    }
+
     fun tracked(): Map<String, Long> = prefs.all.mapNotNull { (key, value) ->
         (value as? Long)?.let { key to it }
     }.toMap()
