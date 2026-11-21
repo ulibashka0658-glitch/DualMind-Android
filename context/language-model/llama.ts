@@ -44,22 +44,6 @@ async function isGGUF(fileUri: string): Promise<boolean> {
   }
 };
 
-async function cleanupLocalModelFiles(modelFiles: Record<string, string>) {
-  const updated = { ...modelFiles };
-  const locals = Object.keys(updated).filter((key) => key.endsWith("(local)"));
-
-  for (const localKey of locals) {
-    try {
-      await FileSystem.deleteAsync(updated[localKey]);
-    } catch (error) {
-      console.error("Error deleting old model file:", error);
-    }
-    delete updated[localKey];
-  }
-
-  return updated;
-};
-
 function parseMessages(messages: Array<MessageNode>): Array<RNLlamaOAICompatibleMessage> {
   return messages.map((message) => {
     const images: Array<string> | undefined = (message.metadata as any)?.images;
@@ -110,18 +94,24 @@ async function pickFile(): Promise<DocumentPickerAsset | undefined> {
   return file.assets?.[0];
 }
 
-// Moves a picked file into the app's documents, replacing any previously picked one.
+// Store each imported file separately, without replacing previously imported files.
 async function importLocalFile(asset: DocumentPickerAsset, files: Record<string, string>): Promise<PickedFile> {
-  const key = `${asset.name.replace(/\.[^/.]+$/, "")} (local)`;
-  const path = FileSystem.documentDirectory + asset.name;
-
-  await FileSystem.moveAsync({
-    from: asset.uri,
-    to: path,
-  });
-
-  const updated = await cleanupLocalModelFiles(files);
-  return { key, files: { ...updated, [key]: path } };
+  const name = asset.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const base = asset.name.replace(/\.[^/.]+$/, "");
+  let key = base + " (local)";
+  let suffix = 2;
+  while (Object.prototype.hasOwnProperty.call(files, key)) {
+    key = base + " " + suffix++ + " (local)";
+  }
+  if (!FileSystem.documentDirectory) throw new Error("Model storage unavailable");
+  const directory = FileSystem.documentDirectory + "local-models/";
+  await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+  let path: string;
+  do {
+    path = directory + Date.now() + "-" + Math.random().toString(36).slice(2) + "-" + name;
+  } while ((await FileSystem.getInfoAsync(path)).exists);
+  await FileSystem.moveAsync({ from: asset.uri, to: path });
+  return { key, files: { ...files, [key]: path } };
 }
 
 export async function pickModelFile(modelFiles: Record<string, string>): Promise<PickedFile | undefined> {
