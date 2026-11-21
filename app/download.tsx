@@ -26,6 +26,7 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
   const { colorScheme } = useSystem();
   const { id, name, repo, branch, tags } = source;
 
+  const pauseRequested = useRef(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState<FileSystem.DownloadProgressData | undefined>(undefined);
   const [projectorProgress, setProjectorProgress] = useState<FileSystem.DownloadProgressData | undefined>(undefined);
@@ -73,16 +74,23 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
     activeKeyRef.current = currentKey;
     activeTransfers.add(modelFilePath);
     if (projectorFilePath) activeTransfers.add(projectorFilePath);
+    pauseRequested.current = false;
     setIsDownloading(true);
     try {
       const transfer = async (url: string, path: string, update: (p: FileSystem.DownloadProgressData) => void, projector = false) => {
+        const storageKey = `dualmind-resume:${url}:${path}`;
+        const saved = await AsyncStorage.getItem(storageKey);
+        const existing = await FileSystem.getInfoAsync(path);
+        const resumeData = saved && existing.exists && !existing.isDirectory && existing.size ? saved : undefined;
+        await AsyncStorage.removeItem(storageKey);
         const job = FileSystem.createDownloadResumable(url, path, {}, p => {
           if (mountedRef.current) update(p);
-        });
+        }, resumeData);
         if (projector) projectorDownloadRef.current = job;
         else downloadRef.current = job;
-        const result = await job.downloadAsync();
-        if (!result || result.status !== 200) throw new Error("Download HTTP status: " + (result?.status ?? "no result"));
+        const result = await (resumeData ? job.resumeAsync() : job.downloadAsync());
+        if (pauseRequested.current && !result) return undefined;
+        if (!result || (result.status !== 200 && !(resumeData && result.status === 206))) throw new Error("Download HTTP status: " + (result?.status ?? "no result"));
         const info = await FileSystem.getInfoAsync(result.uri);
         if (!info.exists || info.isDirectory || !info.size) throw new Error("Downloaded file missing or empty");
         const header = await FileSystem.readAsStringAsync(result.uri, { encoding: FileSystem.EncodingType.Base64, position: 0, length: 4 });
@@ -90,9 +98,11 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         return result.uri;
       };
       const uri = await transfer(modelUrl, modelFilePath, setProgress);
+      if (!uri || pauseRequested.current) return;
       if (projectorUrl && projectorFilePath) {
         if (!setProjectorFiles || !setProjectorKey) throw new Error("Projector storage unavailable");
         const projectorUri = await transfer(projectorUrl, projectorFilePath, setProjectorProgress, true);
+        if (!projectorUri || pauseRequested.current) return;
         setProjectorFiles(prev => ({ ...prev, [currentKey]: projectorUri }));
         setProjectorKey(currentKey);
       } else {
@@ -115,6 +125,25 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
         setProgress(undefined);
         setProjectorProgress(undefined);
       }
+    }
+  };
+
+  const pauseDownload = async () => {
+    const projector = projectorDownloadRef.current;
+    const job = projector ?? downloadRef.current;
+    if (!job || pauseRequested.current) return;
+    pauseRequested.current = true;
+    try {
+      const state = await job.pauseAsync();
+      if (!state.resumeData) throw new Error("Resume data unavailable");
+      const url = projector ? projectorUrl : modelUrl;
+      const path = projector ? projectorFilePath : modelFilePath;
+      await AsyncStorage.setItem(`dualmind-resume:${url}:${path}`, state.resumeData);
+      if (mountedRef.current) Alert.alert("Загрузка приостановлена", "Нажмите скачивание для продолжения.");
+    } catch (error) {
+      pauseRequested.current = false;
+      console.error("Pause failed:", error);
+      if (mountedRef.current) Alert.alert("Не удалось сохранить паузу");
     }
   };
 
@@ -262,6 +291,8 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
           {projectorFileName ? `Model: ${percent}%  Proj: ${projectorPercent ?? 0}%` : percent === undefined ? "Starting..." : `${percent}%`}
         </Text>
       )}
+
+      {isDownloading && progress && <TouchableOpacity onPress={pauseDownload}><Text style={styles.textButton}>Пауза</Text></TouchableOpacity>}
 
       {!isDownloading && !downloaded && (
         <MaterialIconButton
