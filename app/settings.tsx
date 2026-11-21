@@ -1,3 +1,4 @@
+import DiagnosticsSettingsGroup from "@/components/groups/diagnostics-settings-group";
 import LanguageSettingsGroup from "@/components/groups/language-settings-group";
 import ClearButtons from "@/components/buttons/clear-buttons";
 import AssistantSettingsGroup from "@/components/groups/assistant-settings-group";
@@ -52,6 +53,8 @@ function Settings() {
       <SystemSettingsGroup />
       <View style={styles.divider} />
       <ThemeSettingsGroup />
+      <View style={styles.divider} />
+      <DiagnosticsSettingsGroup />
       <View style={styles.divider} />
       <ClearButtons />
     </KeyboardAwareScrollView>
