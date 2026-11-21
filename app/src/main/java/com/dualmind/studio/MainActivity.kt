@@ -22,6 +22,7 @@ class MainActivity : Activity() {
     private lateinit var instructions: EditText
     private lateinit var provider: Spinner
     private lateinit var send: Button
+    private lateinit var clear: Button
     private val history = JSONArray()
     private var activeProvider = 0
 
@@ -99,7 +100,7 @@ class MainActivity : Activity() {
         root.addView(prompt)
         send = Button(this).apply { text = "Отправить" }
         root.addView(send)
-        val clear = Button(this).apply { text = "Новый чат" }
+        clear = Button(this).apply { text = "Новый чат" }
         root.addView(clear)
         clear.setOnClickListener {
             while (history.length() > 0) history.remove(history.length() - 1)
@@ -122,6 +123,7 @@ class MainActivity : Activity() {
         if (selected != 2 && apiKey.isEmpty()) { output.append("\nНужен API-ключ."); return }
         send.isEnabled = false
         provider.isEnabled = false
+        clear.isEnabled = false
         output.append("\n\nТы: $question\nAI: …")
         prompt.setText("")
         executor.execute {
@@ -131,6 +133,7 @@ class MainActivity : Activity() {
                     output.append("\n$response")
                     send.isEnabled = true
                     provider.isEnabled = true
+                    clear.isEnabled = true
                 }
             } catch (e: Exception) {
                 runOnUiThread {
@@ -165,7 +168,10 @@ class MainActivity : Activity() {
             if (provider == 0) body.put("max_completion_tokens", 1024)
             else body.put("max_tokens", 1024)
         }
-        val conn = URL(url).openConnection() as HttpURLConnection
+        val parsedUrl = URL(url)
+        if (provider == 2 && parsedUrl.protocol != "https" && !(parsedUrl.protocol == "http" && parsedUrl.host in setOf("localhost", "127.0.0.1")))
+            throw IllegalArgumentException("Небезопасный адрес API")
+        val conn = parsedUrl.openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "POST"
             conn.connectTimeout = 15000
