@@ -10,6 +10,8 @@ export type ControlAction =
   | 'diagnostics.read'
   | 'models.list'
   | 'models.select'
+  | 'models.stop'
+  | 'models.unload'
   | 'tasks.list'
   | 'tasks.cancel';
 
@@ -34,6 +36,8 @@ const allowedActions = new Set<ControlAction>([
   'diagnostics.read',
   'models.list',
   'models.select',
+  'models.stop',
+  'models.unload',
   'tasks.list',
   'tasks.cancel',
 ]);
@@ -114,5 +118,5 @@ export function parseControlCommand(input: unknown): ControlCommand {
 }
 
 export function requiresUserConfirmation(action: ControlAction): boolean {
-  return action === 'models.select' || action === 'tasks.cancel';
+  return action === 'models.select' || action === 'models.stop' || action === 'models.unload' || action === 'tasks.cancel';
 }
