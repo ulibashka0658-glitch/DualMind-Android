@@ -11,6 +11,7 @@ export interface NativeDownloadSnapshot {
 interface DownloadBridge {
   enqueue(key: string, url: string, filename: string): Promise<string>;
   query(key: string): Promise<NativeDownloadSnapshot | null>;
+  importCompleted(key: string): Promise<string>;
   tracked(): Promise<Record<string, string>>;
   cancel(key: string): Promise<boolean>;
 }
@@ -35,6 +36,13 @@ export const nativeDownloads = {
   async query(key: string) {
     const snapshot = await bridge().query(key);
     return snapshot ? normalizeDownload(snapshot) : null;
+  },
+  async importCompleted(key: string): Promise<string> {
+    const uri = await bridge().importCompleted(key);
+    if (typeof uri !== "string" || !uri.startsWith("file:///") || !uri.endsWith(".gguf")) {
+      throw new Error("Invalid imported model URI");
+    }
+    return uri;
   },
   tracked: () => bridge().tracked(),
   cancel: (key: string) => bridge().cancel(key),
