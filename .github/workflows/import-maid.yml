@@ -10,34 +10,38 @@ permissions:
 jobs:
   import:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: true
-      - name: Fetch upstream Maid
+      - name: Download and validate upstream
+        shell: bash
         run: |
+          set -euo pipefail
           git clone --depth 1 https://github.com/Mobile-Artificial-Intelligence/maid.git /tmp/maid-upstream
           test -f /tmp/maid-upstream/LICENSE
           test -f /tmp/maid-upstream/package.json
-      - name: Create isolated Maid foundation branch
+          grep -q 'MIT License' /tmp/maid-upstream/LICENSE
+      - name: Prepare isolated source branch
+        shell: bash
         run: |
           set -euo pipefail
           if git ls-remote --exit-code --heads origin maid-base >/dev/null; then
-            echo "maid-base already exists; refusing to overwrite it"
+            echo 'maid-base already exists; leaving it unchanged'
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch --orphan maid-base
           git rm -rf --ignore-unmatch . >/dev/null
           git clean -fdx >/dev/null
           tar -C /tmp/maid-upstream --exclude=.git -cf - . | tar -xf -
-          printf '\nDualMind foundation: derived from Mobile-Artificial-Intelligence/maid (MIT).\nOriginal license and notices retained.\n' >> README.md
+          printf '\nDualMind foundation derived from Mobile-Artificial-Intelligence/maid (MIT). Original license retained.\n' >> README.md
           mkdir -p .github/workflows
-          cat > .github/workflows/dualmind-maid-android.yml <<'WORKFLOW'
-          name: Build DualMind Maid Android
+          python3 - <<'PY'
+          from pathlib import Path
+          Path('.github/workflows/dualmind-maid-android.yml').write_text("""name: Build DualMind Maid Android
           on:
             push:
               branches: [maid-base]
@@ -47,7 +51,7 @@ jobs:
           jobs:
             build:
               runs-on: ubuntu-latest
-              timeout-minutes: 60
+              timeout-minutes: 90
               steps:
                 - uses: actions/checkout@v4
                 - uses: actions/setup-node@v4
@@ -61,16 +65,18 @@ jobs:
                 - uses: android-actions/setup-android@v3
                 - name: Install dependencies
                   run: yarn install --frozen-lockfile
-                - name: Build Android
-                  run: yarn build-android
+                - name: Generate Android native project
+                  run: npx expo prebuild --platform android --no-install
+                - name: Build debug APK
+                  run: cd android && chmod +x gradlew && ./gradlew --no-daemon assembleDebug
                 - uses: actions/upload-artifact@v4
+                  if: success()
                   with:
-                    name: DualMind-Maid-APK
-                    path: android/app/build/outputs/apk/**/*.apk
+                    name: DualMind-Maid-debug-APK
+                    path: android/app/build/outputs/apk/debug/*.apk
                     if-no-files-found: error
-          WORKFLOW
+          """)
+          PY
           git add -A
-          git commit -m "Import MIT-licensed Maid Android foundation for DualMind"
+          git commit -m 'Import MIT Maid foundation and Android build workflow'
           git push origin HEAD:refs/heads/maid-base
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
