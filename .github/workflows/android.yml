@@ -36,7 +36,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
       - name: Upload build diagnostics
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DualMind-build-log
@@ -44,7 +44,9 @@ jobs:
             build.log
             build-status.log
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
         with:
           name: DualMind-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
