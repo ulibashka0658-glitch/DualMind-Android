@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import Dropdown from "@/components/dropdowns/dropdown";
 import { useLLM, useSystem } from "@/context";
 import { StyleSheet, Text, View } from "react-native";
@@ -5,6 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 function ModelDropdown({ small }: { small?: boolean }) {
   const { type, models, model, setModel } = useLLM();
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
   if (!models || models.length === 0 || !setModel) {
     return null;
@@ -21,7 +23,7 @@ function ModelDropdown({ small }: { small?: boolean }) {
     return (
       <Dropdown
         items={items}
-        selectedValue={model ?? "Select Model"}
+        selectedValue={model ?? translateUi(language,"Выберите модель","Select Model")}
         onValueChange={setModel!}
       />
     );
@@ -42,7 +44,7 @@ function ModelDropdown({ small }: { small?: boolean }) {
   
   return (
     <View style={styles.row}>
-      <Text style={styles.title}>{type} Model</Text>
+      <Text style={styles.title}>{type} {translateUi(language,"модель","Model")}</Text>
       <Dropdown
         items={items}
         selectedValue={model ?? "Select Model"}
