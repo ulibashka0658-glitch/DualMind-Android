@@ -20,7 +20,12 @@ class ModelDownloadStore(private val context: Context) {
         require(filename.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,199}")) && filename.endsWith(".gguf", true))
         require(key.isNotBlank())
         val previous = prefs.getLong(key, -1L)
-        if (previous >= 0 && query(previous) != null) return previous
+        if (previous >= 0) {
+            val existing = query(previous)
+            if (existing != null && existing.status != DownloadManager.STATUS_FAILED) return previous
+            if (existing != null) manager.remove(previous)
+            check(prefs.edit().remove(key).commit()) { "Could not clear failed download identifier" }
+        }
         val directory = requireNotNull(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS))
         val unique = java.util.UUID.randomUUID().toString() + "-" + filename
         val destination = File(directory, unique)
