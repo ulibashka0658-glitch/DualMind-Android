@@ -128,7 +128,10 @@ export async function connectLlama(
 
   const info = await loadLlamaModelInfo(modelFile) as Record<string, any>;
   const ctx_key = Object.keys(info).find(key => key.toLowerCase().endsWith("context_length"));
-  const n_ctx = ctx_key ? Number(info[ctx_key]) : 2048;
+  const advertisedContext = ctx_key ? Number(info[ctx_key]) : 2048;
+  const n_ctx = Number.isFinite(advertisedContext) && advertisedContext > 0
+    ? Math.min(4096, Math.floor(advertisedContext))
+    : 2048;
 
   const projectorFile =
     projectorKey &&
