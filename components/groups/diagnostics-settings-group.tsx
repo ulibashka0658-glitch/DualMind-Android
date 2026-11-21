@@ -143,6 +143,36 @@ export default function DiagnosticsSettingsGroup() {
     }
   };
 
+  const runModelLifecycle = async (action: "stop" | "unload") => {
+    if (sharing.current) return;
+    const initial = latestLLM.current;
+    if (action === "unload" && (initial.type !== "Llama" || initial.busy || !initial.modelKey)) return;
+    if (action === "stop" && !initial.busy) return;
+    sharing.current = true;
+    setBusy(true);
+    try {
+      const allowed = await new Promise<boolean>(resolve => Alert.alert(
+        t("Подтверждение", "Confirmation"),
+        action === "stop" ? t("Остановить генерацию?", "Stop generation?") : t("Выгрузить модель из памяти? Файл сохранится.", "Unload model from memory? The file will be kept."),
+        [
+          { text: t("Отмена", "Cancel"), style: "cancel", onPress: () => resolve(false) },
+          { text: t("Разрешить", "Allow"), onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      ));
+      if (!allowed) return;
+      const current = latestLLM.current;
+      if (current.type !== initial.type || current.modelKey !== initial.modelKey || current.model !== initial.model) return;
+      if (action === "stop" && current.busy) await current.stop();
+      if (action === "unload" && current.type === "Llama" && !current.busy && current.modelKey && current.setModelKey) current.setModelKey(undefined);
+    } catch {
+      Alert.alert(t("Ошибка", "Error"), t("Не удалось выполнить действие.", "Action failed."));
+    } finally {
+      sharing.current = false;
+      setBusy(false);
+    }
+  };
+
   const shareDiagnostics = async () => {
     if (sharing.current) return;
     sharing.current = true;
@@ -199,6 +229,16 @@ export default function DiagnosticsSettingsGroup() {
       <Pressable accessibilityRole="button" disabled={busy} onPress={runConsentCheck} style={styles.button}>
         <Text style={styles.buttonText}>{t("Проверить подтверждение команд", "Check command confirmation")}</Text>
       </Pressable>
+      {llm.busy && (
+        <Pressable accessibilityRole="button" disabled={busy} onPress={() => runModelLifecycle("stop")} style={styles.button}>
+          <Text style={styles.buttonText}>{t("Запросить остановку генерации", "Request generation stop")}</Text>
+        </Pressable>
+      )}
+      {llm.type === "Llama" && !!llm.modelKey && (
+        <Pressable accessibilityRole="button" disabled={busy || llm.busy} onPress={() => runModelLifecycle("unload")} style={styles.button}>
+          <Text style={styles.buttonText}>{t("Выгрузить модель", "Unload model")}</Text>
+        </Pressable>
+      )}
       {availableModels().map(id => (
         <Pressable key={id} accessibilityRole="button" disabled={busy || llm.busy} onPress={() => selectRealModel(id)} style={styles.button}>
           <Text style={styles.buttonText}>{t("Выбрать модель: ", "Select model: ")}{id}</Text>
