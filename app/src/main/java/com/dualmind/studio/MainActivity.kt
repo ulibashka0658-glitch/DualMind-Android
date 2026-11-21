@@ -140,6 +140,8 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     output.append("\nОшибка: ${e.message}")
                     send.isEnabled = true
+                    provider.isEnabled = true
+                    clear.isEnabled = true
                 }
             }
         }
