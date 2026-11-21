@@ -82,14 +82,14 @@ function parseMessages(messages: Array<MessageNode>): Array<RNLlamaOAICompatible
 }
 
 // Keep the original chat intact; guide the local model only at inference time.
-export function withRussianLanguageHint(messages: RNLlamaOAICompatibleMessage[]): RNLlamaOAICompatibleMessage[] {
+export function withRussianLanguageHint(messages: RNLlamaOAICompatibleMessage[], mode: unknown = 'auto'): RNLlamaOAICompatibleMessage[] {
   const lastUser = [...messages].reverse().find(message => message.role === "user");
   const content = lastUser?.content;
   const userText = typeof content === "string" ? content : Array.isArray(content)
     ? content.map(part => part.type === "text" ? part.text : "").join(" ")
     : "";
-  if (!/[А-Яа-яЁё]/.test(userText)) return messages;
-  const hint = "Отвечай на русском языке, если пользователь явно не попросил другой язык. Не смешивай языки без необходимости. Если не знаешь ответа, скажи об этом, не выдумывай факты.";
+  if (mode === "off" || (mode !== "ru" && mode !== "en" && !/[А-Яа-яЁё]/.test(userText))) return messages;
+  const hint = mode === "en" ? "Respond in English unless the user explicitly requests another language. Avoid unnecessary language mixing. Admit uncertainty rather than inventing facts." : "Отвечай на русском языке, если пользователь явно не попросил другой язык. Не смешивай языки без необходимости. Если не знаешь ответа, скажи об этом, не выдумывай факты.";
   const first = messages[0];
   if (first?.role === "system") {
     if (typeof first.content !== "string") return messages;
@@ -172,6 +172,7 @@ export async function connectLlama(
       ? projectorFiles[projectorKey]
       : undefined;
 
+  const { response_language: _responseLanguage, ...contextParameters } = parameters;
   const llama = await measureLlama("load", () => initLlama({
     model: modelFile,
     use_mlock: Platform.OS !== "android",
@@ -179,7 +180,7 @@ export async function connectLlama(
     n_gpu_layers: 99,
     // Conservative Android defaults; explicit user settings still take priority.
     ...(Platform.OS === "android" ? { n_threads: 4, n_batch: 128 } : {}),
-    ...parameters,
+    ...contextParameters,
     ctx_shift: !projectorFile
   }));
 
@@ -212,7 +213,7 @@ export async function connectLlama(
         temperature: bounded("temperature", 0.6, 0, 2),
         top_p: bounded("top_p", 0.9, 0, 1),
         top_k: Math.round(bounded("top_k", 40, 0, 200)),
-        messages: withRussianLanguageHint(parseMessages(messages))
+        messages: withRussianLanguageHint(parseMessages(messages), sampling.response_language)
       }, (data) => onUpdate(data.token)));
 
       console.log('Timings:', result.timings);
