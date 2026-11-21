@@ -81,6 +81,23 @@ function parseMessages(messages: Array<MessageNode>): Array<RNLlamaOAICompatible
   });
 }
 
+// Keep the original chat intact; guide the local model only at inference time.
+export function withRussianLanguageHint(messages: RNLlamaOAICompatibleMessage[]): RNLlamaOAICompatibleMessage[] {
+  const lastUser = [...messages].reverse().find(message => message.role === "user");
+  const content = lastUser?.content;
+  const userText = typeof content === "string" ? content : Array.isArray(content)
+    ? content.map(part => part.type === "text" ? part.text : "").join(" ")
+    : "";
+  if (!/[А-Яа-яЁё]/.test(userText)) return messages;
+  const hint = "Отвечай на русском языке, если пользователь явно не попросил другой язык. Не смешивай языки без необходимости. Если не знаешь ответа, скажи об этом, не выдумывай факты.";
+  const first = messages[0];
+  if (first?.role === "system") {
+    if (typeof first.content !== "string") return messages;
+    return [{ ...first, content: first.content + "\n" + hint }, ...messages.slice(1)];
+  }
+  return [{ role: "system", content: hint }, ...messages];
+}
+
 export interface PickedFile {
   key: string;
   files: Record<string, string>;
@@ -187,7 +204,7 @@ export async function connectLlama(
     imagesSupported,
     prompt: async ({ messages, onUpdate }) => {
       const result = await measureLlama("generate", () => llama.completion({
-        messages: parseMessages(messages)
+        messages: withRussianLanguageHint(parseMessages(messages))
       }, (data) => onUpdate(data.token)));
 
       console.log('Timings:', result.timings);
