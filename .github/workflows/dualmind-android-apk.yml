@@ -1,0 +1,51 @@
+name: DualMind Android APK
+
+on:
+  push:
+    branches: [maid-base]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --non-interactive
+      - name: Generate Android project
+        run: CI=1 yarn prebuild --no-install
+      - name: Build standalone test APK
+        working-directory: android
+        run: bash gradlew :app:assembleRelease --no-daemon --stacktrace
+      - name: Verify APK signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)"
+          test -n "$signer"
+          shopt -s nullglob
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          test "${#apks[@]}" -gt 0
+          for apk in "${apks[@]}"; do
+            "$signer" verify --verbose "$apk"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maid-base-test-apks
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
