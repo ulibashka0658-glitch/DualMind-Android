@@ -6,6 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -22,6 +23,14 @@ jobs:
       - name: Compile debug APK
         run: |
           set -o pipefail
+          (
+            while true; do
+              sleep 120
+              echo "[DualMind] Проверка: сборка всё ещё выполняется ($(date -u +%FT%TZ))" | tee -a build-status.log
+            done
+          ) &
+          watcher_pid=$!
+          trap 'kill "$watcher_pid" 2>/dev/null || true' EXIT
           gradle --no-daemon --stacktrace :app:assembleDebug 2>&1 | tee build.log
         shell: bash
         env:
@@ -31,7 +40,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DualMind-build-log
-          path: build.log
+          path: |
+            build.log
+            build-status.log
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
