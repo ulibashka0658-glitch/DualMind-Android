@@ -29,6 +29,8 @@ export function readMessageUsage(metadata: unknown): StoredMessageUsage | null {
   const usage = data.usage;
   if (usage.source !== 'provider' && usage.source !== 'local-engine' &&
       usage.source !== 'estimate' && usage.source !== 'unknown') return null;
+  if (!Object.prototype.hasOwnProperty.call(usage, 'inputTokens') ||
+      !Object.prototype.hasOwnProperty.call(usage, 'outputTokens')) return null;
   const inputTokens = usage.inputTokens;
   const outputTokens = usage.outputTokens;
   if (inputTokens !== null && !isTokenCount(inputTokens)) return null;
