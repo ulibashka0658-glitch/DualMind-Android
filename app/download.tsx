@@ -484,6 +484,11 @@ function Download() {
                 style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme.primaryContainer, opacity: busy ? 0.5 : 1 }}>
                 <Text style={{ color: colorScheme.onPrimaryContainer }}>{modelKey === key ? (busy ? "Загрузка / ожидание" : ready ? "Активна" : "Загрузить в память") : "Выбрать модель"}</Text>
               </TouchableOpacity>
+              {modelKey === key && <TouchableOpacity accessibilityRole="button" disabled={busy || !setModelKey}
+                onPress={() => { setModelKey?.(undefined); setProjectorKey?.(undefined); }}
+                style={{ padding: 10, borderRadius: 12, backgroundColor: colorScheme.primaryContainer, opacity: busy ? 0.5 : 1 }}>
+                <Text style={{ color: colorScheme.onPrimaryContainer }}>Выгрузить модель из памяти (файл останется)</Text>
+              </TouchableOpacity>}
               {key.endsWith("(local)") && <TouchableOpacity accessibilityRole="button"
                 disabled={busy || modelKey === key || !setModelFiles}
                 onPress={() => deleteImportedModel(key)}
