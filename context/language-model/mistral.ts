@@ -23,7 +23,7 @@ export async function connectMistral(
       const response = await mistral.models.list();
       return { models: response.data?.map((model) => model.id) ?? [] };
     },
-    prompt: async ({ model, messages, parameters, onUpdate, shouldStop }) => {
+    prompt: async ({ model, messages, parameters, onUpdate, onUsage, shouldStop }) => {
       const response = await mistral.chat.complete({
         model,
         messages: messages.map((msg) => ({
@@ -32,6 +32,19 @@ export async function connectMistral(
         })),
         ...parameters,
       });
+
+      // The Mistral SDK uses camelCase for completion usage fields.
+      // Some compatible responses use snake_case, so validate both forms.
+      const rawUsage: unknown = response.usage;
+      if (rawUsage && typeof rawUsage === 'object') {
+        const counts = rawUsage as Record<string, unknown>;
+        const input = counts.promptTokens ?? counts.prompt_tokens;
+        const output = counts.completionTokens ?? counts.completion_tokens;
+        if (typeof input === 'number' && Number.isSafeInteger(input) && input >= 0 &&
+            typeof output === 'number' && Number.isSafeInteger(output) && output >= 0) {
+          onUsage?.({ inputTokens: input, outputTokens: output, source: 'provider' });
+        }
+      }
 
       const content = response.choices[0]?.message?.content ?? "";
 
