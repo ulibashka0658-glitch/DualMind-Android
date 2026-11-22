@@ -106,7 +106,7 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
         ...meta,
         tokenUsage: {
           usage,
-          mode: LLM.type === "Llama" ? "local" : "cloud",
+          mode: ["Llama", "Ollama", "llmman"].includes(LLM.type) ? "local" : "cloud",
           pricing: null,
           fx: null,
         },
