@@ -6,7 +6,6 @@ import * as Network from "expo-network";
 import { getLogs, subscribeLogs } from "@/utilities/logger";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import * as Crypto from "expo-crypto";
 import { createControlDispatcher } from "@/utils/dualmind-control-dispatcher";
 import { redactDiagnostics } from "@/utils/dualmind-control-protocol";
@@ -63,7 +62,7 @@ export default function DiagnosticsSettingsGroup() {
     const value = JSON.stringify(result, null, 2);
     Alert.alert(title, value, [
       { text: t("Закрыть", "Close"), style: "cancel" },
-      { text: t("Копировать", "Copy"), onPress: () => { void Clipboard.setStringAsync(value); } },
+      { text: t("Скопировать / поделиться", "Copy / Share"), onPress: () => { void Share.share({ message: value }); } },
     ]);
   };
 
