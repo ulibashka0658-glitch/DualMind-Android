@@ -6,6 +6,7 @@ import * as Network from "expo-network";
 import { getLogs, subscribeLogs } from "@/utilities/logger";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import * as Crypto from "expo-crypto";
 import { createControlDispatcher } from "@/utils/dualmind-control-dispatcher";
 import { redactDiagnostics } from "@/utils/dualmind-control-protocol";
@@ -58,6 +59,14 @@ export default function DiagnosticsSettingsGroup() {
     buttonText: { color: colorScheme.onPrimary, fontSize: 14, fontWeight: "600", textAlign: "center" },
   });
 
+  const showCopyableResult = (title: string, result: unknown) => {
+    const value = JSON.stringify(result, null, 2);
+    Alert.alert(title, value, [
+      { text: t("Закрыть", "Close"), style: "cancel" },
+      { text: t("Копировать", "Copy"), onPress: () => { void Clipboard.setStringAsync(value); } },
+    ]);
+  };
+
   const availableModels = () => llm.type === "Llama" && llm.modelFiles ? Object.keys(llm.modelFiles) : (llm.models ?? []);
   const modelStatus = () => ({
     provider: llm.type, ready: llm.ready, busy: llm.busy, imagesSupported: llm.imagesSupported,
@@ -83,7 +92,7 @@ export default function DiagnosticsSettingsGroup() {
       for (const action of ["status.read", "diagnostics.read", "models.list"]) {
         results.push(await dispatcher({ version: 1, id: Crypto.randomUUID(), action }));
       }
-      Alert.alert(t("Локальная проверка команд", "Local command check"), JSON.stringify(results, null, 2));
+      showCopyableResult(t("Локальная проверка команд", "Local command check"), results);
     } catch {
       Alert.alert(t("Ошибка", "Error"), t("Проверка не выполнена.", "Check failed."));
     } finally {
@@ -119,7 +128,7 @@ export default function DiagnosticsSettingsGroup() {
         }),
       });
       const result = await dispatcher({ version: 1, id: Crypto.randomUUID(), action: "models.select", params: { modelId: "local-test-model" } });
-      Alert.alert(t("Результат теста", "Test result"), JSON.stringify({ ...result, simulated }, null, 2));
+      showCopyableResult(t("Результат теста", "Test result"), { ...result, simulated });
     } catch {
       Alert.alert(t("Ошибка", "Error"), t("Проверка не выполнена.", "Check failed."));
     } finally {
@@ -163,7 +172,7 @@ export default function DiagnosticsSettingsGroup() {
         )),
       });
       const result = await dispatcher({ version: 1, id: Crypto.randomUUID(), action: "models.select", params: { modelId } });
-      Alert.alert(t("Результат команды", "Command result"), JSON.stringify(result, null, 2));
+      showCopyableResult(t("Результат команды", "Command result"), result);
     } finally {
       sharing.current = false;
       setBusy(false);
@@ -218,7 +227,7 @@ export default function DiagnosticsSettingsGroup() {
         version: 1, id: Crypto.randomUUID(),
         action: action === "stop" ? "models.stop" : "models.unload",
       });
-      Alert.alert(t("Результат команды", "Command result"), JSON.stringify(result, null, 2));
+      showCopyableResult(t("Результат команды", "Command result"), result);
     } catch {
       Alert.alert(t("Ошибка", "Error"), t("Не удалось выполнить действие.", "Action failed."));
     } finally {
