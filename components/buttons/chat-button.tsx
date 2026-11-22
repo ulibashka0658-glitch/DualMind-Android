@@ -3,7 +3,7 @@ import { useChat, useSystem } from "@/context";
 import * as FileSystem from "expo-file-system/legacy";
 import { deleteNode, getRootMapping, MessageNode, updateContent } from "message-nodes";
 import { useEffect, useRef, useState } from "react";
-import { LayoutRectangle, StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
+import { Alert, LayoutRectangle, StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
 
 function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: string }) {
   const { root, setRoot, mappings, setMappings } = useChat();
@@ -56,10 +56,14 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
   }
 
   const deleteChat = () => {
-    if (root === node.id) {
-      setRoot(undefined);
-    }
-    setMappings((prev) => deleteNode(prev, node.id));
+    setVisible(false);
+    Alert.alert("Удалить чат?", "Этот чат будет удалён без возможности восстановления.", [
+      { text: "Отмена", style: "cancel" },
+      { text: "Удалить", style: "destructive", onPress: () => {
+        if (root === node.id) setRoot(undefined);
+        setMappings(prev => deleteNode(prev, node.id));
+      } },
+    ]);
   }
 
   const styles = StyleSheet.create({
@@ -134,19 +138,19 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
             setRename(true);
           }}
         >
-          <Text style={styles.popoverButton}>Rename</Text>
+          <Text style={styles.popoverButton}>Переименовать</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`${testID}-export`}
           onPress={exportChat}
         >
-          <Text style={styles.popoverButton}>Export</Text>
+          <Text style={styles.popoverButton}>Экспортировать</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`${testID}-delete`}
           onPress={deleteChat}
         >
-          <Text style={styles.popoverButton}>Delete</Text>
+          <Text style={styles.popoverButton}>Удалить чат</Text>
         </TouchableOpacity>
       </Popover>
     </>
