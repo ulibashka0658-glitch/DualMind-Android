@@ -1,4 +1,5 @@
 import { MessageNode } from "message-nodes";
+import type { TokenUsage } from "@/lib/token-usage";
 
 export const LanguageModelTypes = [
   "Llama",
@@ -44,6 +45,8 @@ export interface PromptRequest {
   parameters: ModelParameters;
   imagesSupported: boolean;
   onUpdate: (message: string) => void;
+  /** Provider-reported usage, delivered once when available. */
+  onUsage?: (usage: TokenUsage) => void;
   shouldStop: () => boolean;
 }
 
@@ -93,7 +96,8 @@ interface LanguageModelBaseProps {
   setParameters: React.Dispatch<React.SetStateAction<ModelParameters>>;
   prompt: (
     messages: Array<MessageNode>,
-    onUpdate: (message: string) => void
+    onUpdate: (message: string) => void,
+    onUsage?: (usage: TokenUsage) => void
   ) => Promise<void>;
   stop: () => Promise<void>
 }
