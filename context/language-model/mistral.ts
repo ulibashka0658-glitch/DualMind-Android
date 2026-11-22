@@ -1,4 +1,5 @@
 import { Mistral } from '@mistralai/mistralai';
+import { readMistralUsage } from '@/lib/mistral-usage';
 import { TextChunk } from "@mistralai/mistralai/models/components";
 import { isValidURL, LanguageModelClient, LanguageModelSettings } from "./types";
 
@@ -33,18 +34,8 @@ export async function connectMistral(
         ...parameters,
       });
 
-      // The Mistral SDK uses camelCase for completion usage fields.
-      // Some compatible responses use snake_case, so validate both forms.
-      const rawUsage: unknown = response.usage;
-      if (rawUsage && typeof rawUsage === 'object') {
-        const counts = rawUsage as Record<string, unknown>;
-        const input = counts.promptTokens ?? counts.prompt_tokens;
-        const output = counts.completionTokens ?? counts.completion_tokens;
-        if (typeof input === 'number' && Number.isSafeInteger(input) && input >= 0 &&
-            typeof output === 'number' && Number.isSafeInteger(output) && output >= 0) {
-          onUsage?.({ inputTokens: input, outputTokens: output, source: 'provider' });
-        }
-      }
+      const usage = readMistralUsage(response.usage);
+      if (usage) onUsage?.(usage);
 
       const content = response.choices[0]?.message?.content ?? "";
 
