@@ -5,7 +5,8 @@ import { randomUUID } from "expo-crypto";
 import { ImagePickerAsset } from "expo-image-picker";
 import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 import { addNode, getConversation, updateContent } from "message-nodes";
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { Text, View } from "react-native";
 
 interface PromptButtonProps {
   promptText: string; 
@@ -20,6 +21,8 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
   const LLM = useLLM();
 
   const [dictating, setDictating] = useState(false);
+  const [startingDictation, setStartingDictation] = useState(false);
+  const transcriptRef = useRef("");
 
   const prompt = () => {
     if (!LLM.ready) return;
@@ -99,6 +102,8 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
   };
 
   const dictate = async () => {
+    setStartingDictation(true);
+    transcriptRef.current = "";
     try {
       let granted = false;
       const perms = await ExpoSpeechRecognitionModule.getPermissionsAsync();
@@ -111,21 +116,26 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
       }
       else {
         console.warn("Microphone permission denied and cannot ask again.");
+        setStartingDictation(false);
         return;
       }
 
       if (!granted) {
         console.warn("Microphone permission denied.");
+        setStartingDictation(false);
         return;
       }
     } catch (error) {
       console.error("Error requesting microphone permission:", error);
+      setStartingDictation(false);
       return;
     }
 
     try {
       ExpoSpeechRecognitionModule.start({
-        lang: "en-US",
+        lang: "ru-RU",
+        interimResults: true,
+        continuous: true,
         addsPunctuation: true,
         androidIntentOptions: {
           EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 10000,
@@ -134,31 +144,41 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
       });
     } catch (error) {
       console.error("Error starting speech recognition:", error);
+      setStartingDictation(false);
     }
   };
 
   useEffect(() => {
     const startListener = ExpoSpeechRecognitionModule.addListener("start", () => {
       setDictating(true);
+      setStartingDictation(false);
     });
 
     const endListener = ExpoSpeechRecognitionModule.addListener("end", () => {
       setDictating(false);
+      setStartingDictation(false);
     });
 
     const resultListener = ExpoSpeechRecognitionModule.addListener("result", (event) => {
+      const transcript = event.results?.[0]?.transcript ?? "";
+      if (!transcript.trim()) return;
+      // Interim results replace the current hypothesis rather than duplicating words.
       setPromptText(prev => {
-        const transcript = event.results?.[0]?.transcript ?? "";
-        const glue = prev.trim().length > 0 ? " " : "";
-        return prev + glue + transcript;
+        const previousHypothesis = transcriptRef.current;
+        const base = previousHypothesis && prev.endsWith(previousHypothesis)
+          ? prev.slice(0, -previousHypothesis.length) : prev;
+        const glue = base.trim().length > 0 && !base.endsWith(" ") ? " " : "";
+        transcriptRef.current = transcript;
+        return base + glue + transcript;
       });
-      ExpoSpeechRecognitionModule.stop();
+      // Do not stop or submit automatically. The user controls both actions.
     });
 
     // If the lib supports it, this is worth having:
     const errorListener = ExpoSpeechRecognitionModule.addListener?.("error" as any, (event: any) => {
       console.error("Speech recognition error:", event);
       setDictating(false);
+      setStartingDictation(false);
     });
 
     return () => {
@@ -171,16 +191,19 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
 
   if (dictating) {
     return (
-      <MaterialIconButton
-        testID="stop-dictate-button"
-        icon="mic-off"
-        size={28}
-        color={colorScheme.primary}
-        onPress={() => ExpoSpeechRecognitionModule.stop()}
-      />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Text accessibilityRole="text" style={{ color: colorScheme.primary, fontWeight: "bold" }}>● Запись</Text>
+        <MaterialIconButton testID="stop-dictate-button" icon="stop-circle" size={28}
+          color={colorScheme.primary} onPress={() => ExpoSpeechRecognitionModule.stop()} />
+        {promptText.trim().length > 0 && (
+          <MaterialIconButton testID="send-dictated-button" icon="send" size={28}
+            color={colorScheme.primary} disabled={!LLM.ready}
+            onPress={() => { ExpoSpeechRecognitionModule.stop(); prompt(); }} />
+        )}
+      </View>
     );
   }
-  else if (LLM.ready && LLM.busy) {
+    else if (LLM.ready && LLM.busy) {
     return (
       <MaterialIconButton
         testID="stop-button"
@@ -210,7 +233,8 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
       icon="mic"
       size={28}
       color={colorScheme.primary}
-      onPress={dictate} 
+      onPress={dictate}
+      disabled={startingDictation} 
     />
   );
 }
