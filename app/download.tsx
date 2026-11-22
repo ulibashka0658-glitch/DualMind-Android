@@ -370,9 +370,46 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
 
 function Download() {
   const { colorScheme } = useSystem();
-  const { modelFiles, modelKey, busy, ready, setModelKey, projectorFiles, setProjectorKey, pickModelFile } = useLLM();
+  const { modelFiles, modelKey, busy, ready, setModelKey, setModelFiles, projectorFiles, setProjectorKey, pickModelFile } = useLLM();
   const [tab, setTab] = useState<"library" | "catalog">("library");
   const [search, setSearch] = useState("");
+  const deletingRef = useRef(false);
+  const deleteImportedModel = (key: string) => {
+    if (!key.endsWith("(local)") || busy || key === modelKey || deletingRef.current || !setModelFiles) return;
+    Alert.alert("Удалить локальную модель?", "Файл будет удалён с устройства. Это действие нельзя отменить.", [
+      { text: "Отмена", style: "cancel" },
+      { text: "Удалить", style: "destructive", onPress: () => {
+        if (deletingRef.current || busy || key === modelKey) return;
+        const uri = modelFiles?.[key];
+        const root = FileSystem.documentDirectory + "local-models/";
+        if (!uri || !FileSystem.documentDirectory || !uri.startsWith(root) || uri.slice(root.length).includes("/")) {
+          Alert.alert("Удаление недоступно", "Для этой модели безопасное удаление пока не поддерживается.");
+          return;
+        }
+        if (Object.entries(modelFiles ?? {}).some(([otherKey, otherUri]) => otherKey !== key && otherUri === uri)) {
+          Alert.alert("Удаление недоступно", "Этот файл используется другой записью библиотеки.");
+          return;
+        }
+        deletingRef.current = true;
+        void (async () => {
+          try {
+            await FileSystem.deleteAsync(uri);
+            setModelFiles(prev => {
+              if (prev[key] !== uri) return prev;
+              const next = { ...prev };
+              delete next[key];
+              return next;
+            });
+          } catch (error) {
+            console.error("Unable to delete imported model:", error);
+            Alert.alert("Не удалось удалить модель");
+          } finally {
+            deletingRef.current = false;
+          }
+        })();
+      } },
+    ]);
+  };
   const [fileSizes, setFileSizes] = useState<Record<string, number>>({});
   const filesSignature = JSON.stringify(modelFiles ?? {});
   useEffect(() => {
@@ -446,6 +483,12 @@ function Download() {
                 style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme.primaryContainer, opacity: busy ? 0.5 : 1 }}>
                 <Text style={{ color: colorScheme.onPrimaryContainer }}>{modelKey === key ? (busy ? "Загрузка / ожидание" : ready ? "Активна" : "Загрузить в память") : "Выбрать модель"}</Text>
               </TouchableOpacity>
+              {key.endsWith("(local)") && <TouchableOpacity accessibilityRole="button"
+                disabled={busy || modelKey === key || !setModelFiles}
+                onPress={() => deleteImportedModel(key)}
+                style={{ padding: 10, borderRadius: 12, backgroundColor: colorScheme.errorContainer, opacity: busy || modelKey === key ? 0.5 : 1 }}>
+                <Text style={{ color: colorScheme.onErrorContainer }}>{modelKey === key ? "Сначала выгрузите или переключите модель" : "Удалить локальную модель"}</Text>
+              </TouchableOpacity>}
             </View>
           ))}
         </View>
