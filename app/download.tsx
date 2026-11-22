@@ -87,7 +87,8 @@ function ModelDownload({ source }: { source: HuggingfaceModel }) {
           const filename = url.slice(url.lastIndexOf("/") + 1);
           await nativeDownloads.enqueue(key, url, filename);
           while (true) {
-            if (!mountedRef.current) return undefined;
+            // Keep observing Android DownloadManager after this screen unmounts.
+            // Context setters remain valid; only local UI updates require mountedRef.
             const snapshot = await nativeDownloads.query(key);
             if (!snapshot || snapshot.state === "failed" || snapshot.state === "unknown") {
               throw new Error("Android download failed: " + (snapshot?.reason ?? "missing record"));
