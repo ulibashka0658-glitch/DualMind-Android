@@ -8,7 +8,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { addNode, getRoots } from "message-nodes";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -17,8 +17,11 @@ function DrawerContent() {
   const { colorScheme, systemPrompt } = useSystem();
   const insets = useSafeAreaInsets();
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
+  const [showArchive, setShowArchive] = useState(false);
 
   const roots = getRoots<string>(mappings);
+  const activeRoots = roots.filter(node => !node.metadata?.archived);
+  const archivedRoots = roots.filter(node => !!node.metadata?.archived);
 
   const loadMappings = async () => {
     try {
@@ -112,7 +115,10 @@ function DrawerContent() {
   return (
     <View testID="drawer-content" style={styles.view}>
       <View style={styles.header}>
-        <Text style={styles.controlsText}>Chats</Text>
+        <TouchableOpacity onPress={() => setShowArchive(prev => !prev)}>
+          <Text style={styles.controlsText}>{showArchive ? `Архив (${archivedRoots.length})` : `Чаты (${activeRoots.length})`}</Text>
+          <Text style={{ color: colorScheme.primary, fontSize: 12 }}>{showArchive ? "Показать чаты" : "Открыть архив"}</Text>
+        </TouchableOpacity>
         <View style={styles.controls}>
           <MaterialIconButton
             testID="load-mappings-button"
@@ -126,7 +132,7 @@ function DrawerContent() {
             icon="delete"
             style={styles.button}
             size={24}
-            disabled={roots.length === 0}
+            disabled={activeRoots.length === 0}
             onPress={() => setShowClearConfirm(true)}
           />
           <MaterialIconButton
@@ -141,7 +147,7 @@ function DrawerContent() {
       <View style={styles.divider} />
       {/* Aware rather than plain: renaming a chat focuses a TextInput in this list. */}
       <KeyboardAwareScrollView style={styles.sessions} contentContainerStyle={styles.sessionsContent} bottomOffset={16}>
-        {roots.map((root, index) => <ChatButton testID={`chat-button-${index}`} key={root.id} node={root} />)}
+        {(showArchive ? archivedRoots : activeRoots).map((root, index) => <ChatButton testID={`chat-button-${index}`} key={root.id} node={root} />)}
       </KeyboardAwareScrollView>
       <ConfirmView
         testID="clear-chats-confirm-modal"
