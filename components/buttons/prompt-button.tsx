@@ -1,3 +1,4 @@
+import type { TokenUsage } from "@/lib/token-usage";
 import { MaterialIconButton } from "@/components/buttons/icon-button";
 import { useChat, useLLM, useSystem } from "@/context";
 import getMetadata from "@/utilities/metadata";
@@ -98,6 +99,18 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
           updateTime: new Date().toISOString(),
         }))
       );
+    }, (usage: TokenUsage) => {
+      // Persist provider usage on this exact assistant response. Never guess
+      // missing counts or silently assign cloud pricing.
+      setMappings(prev => updateContent(prev, responseId, content => content, meta => ({
+        ...meta,
+        tokenUsage: {
+          usage,
+          mode: LLM.type === "Llama" ? "local" : "cloud",
+          pricing: null,
+          fx: null,
+        },
+      })));
     });
   };
 
