@@ -6,7 +6,7 @@ import HuggingfaceModelsRaw from "@/models.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from 'expo-file-system/legacy';
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface HuggingfaceModel {
@@ -372,6 +372,27 @@ function Download() {
   const { colorScheme } = useSystem();
   const { modelFiles, modelKey, busy, ready, setModelKey, projectorFiles, setProjectorKey, pickModelFile } = useLLM();
   const [tab, setTab] = useState<"library" | "catalog">("library");
+  const [search, setSearch] = useState("");
+  const [fileSizes, setFileSizes] = useState<Record<string, number>>({});
+  const filesSignature = JSON.stringify(modelFiles ?? {});
+  useEffect(() => {
+    let cancelled = false;
+    const inspect = async () => {
+      const sizes: Record<string, number> = {};
+      await Promise.all(Object.entries(modelFiles ?? {}).map(async ([key, uri]) => {
+        try {
+          const info = await FileSystem.getInfoAsync(uri);
+          if (info.exists && !info.isDirectory && typeof info.size === "number") sizes[key] = info.size;
+        } catch (error) { console.warn("Unable to inspect model file:", key, error); }
+      }));
+      if (!cancelled) setFileSizes(sizes);
+    };
+    void inspect();
+    return () => { cancelled = true; };
+  // Reinspect when registered model paths change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filesSignature]);
+  const visibleKeys = Object.keys(modelFiles ?? {}).filter(key => key.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).sort();
   const insets = useSafeAreaInsets();
 
   const styles = StyleSheet.create({
@@ -409,10 +430,17 @@ function Download() {
       </View>
       {tab === "library" && (
         <View style={{ gap: 12 }}>
+          <TextInput accessibilityLabel="Поиск скачанных моделей" placeholder="Поиск по моделям..." placeholderTextColor={colorScheme.secondary} value={search} onChangeText={setSearch}
+            style={{ color: colorScheme.onSurface, borderColor: colorScheme.outlineVariant, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }} />
+          {visibleKeys.length === 0 && Object.keys(modelFiles ?? {}).length > 0 && <Text style={{ color: colorScheme.onSurface }}>Ничего не найдено.</Text>}
           {Object.keys(modelFiles ?? {}).length === 0 && <Text style={{ color: colorScheme.onSurface }}>Нет скачанных моделей. Откройте каталог или импортируйте GGUF.</Text>}
-          {Object.keys(modelFiles ?? {}).sort().map(key => (
+          {visibleKeys.map(key => ( 
             <View key={key} style={{ padding: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: colorScheme.outlineVariant }}>
               <Text style={{ color: colorScheme.onSurface }}>{key}</Text>
+              <Text style={{ color: colorScheme.secondary }}>
+                GGUF{fileSizes[key] !== undefined ? " • " + (fileSizes[key] / (1024 ** 3)).toFixed(2) + " ГБ" : " • размер неизвестен"}
+                {key.endsWith("(local)") ? " • импортирована" : " • скачана"}
+              </Text>
               <TouchableOpacity accessibilityRole="button" disabled={busy || !setModelKey || (modelKey === key && ready)}
                 onPress={() => { setProjectorKey?.(projectorFiles?.[key] ? key : undefined); setModelKey?.(key); }}
                 style={{ padding: 12, borderRadius: 12, backgroundColor: colorScheme.primaryContainer, opacity: busy ? 0.5 : 1 }}>
