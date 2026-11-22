@@ -30,12 +30,14 @@ export function createOpenAIClient(openai: OpenAI): LanguageModelClient {
       const response = await openai.models.list();
       return { models: response.data.map((model) => model.id) };
     },
-    prompt: async ({ model, messages, parameters, imagesSupported, onUpdate, shouldStop }) => {
+    prompt: async ({ model, messages, parameters, imagesSupported, onUpdate, onUsage, shouldStop }) => {
       const stream = await openai.chat.completions.create({
         model,
         messages: toChatMessages(messages, imagesSupported),
         stream: true,
         ...parameters,
+        // Request the final usage chunk from compatible chat completion APIs.
+        stream_options: { include_usage: true },
       }, {
         maxRetries: 3,
       });
@@ -46,6 +48,15 @@ export function createOpenAIClient(openai: OpenAI): LanguageModelClient {
           break;
         }
 
+        if (event.usage && Number.isSafeInteger(event.usage.prompt_tokens) &&
+            Number.isSafeInteger(event.usage.completion_tokens) &&
+            event.usage.prompt_tokens >= 0 && event.usage.completion_tokens >= 0) {
+          onUsage?.({
+            inputTokens: event.usage.prompt_tokens,
+            outputTokens: event.usage.completion_tokens,
+            source: 'provider',
+          });
+        }
         const chunk = event.choices[0]?.delta?.content;
         if (chunk) {
           onUpdate(chunk);
