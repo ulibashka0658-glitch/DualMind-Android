@@ -1,3 +1,4 @@
+import type { TokenUsage } from "@/lib/token-usage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MessageNode } from "message-nodes";
 import { createContext, Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from "react";
@@ -177,7 +178,8 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
 
   const prompt = async (
     messages: Array<MessageNode>,
-    onUpdate: (message: string) => void
+    onUpdate: (message: string) => void,
+    onUsage?: (usage: TokenUsage) => void
   ) => {
     if (!client) {
       console.warn(`${type} not initialized`);
@@ -206,6 +208,7 @@ export function LanguageModelProvider({ children }: { children: React.ReactNode 
         parameters: values.parameters,
         imagesSupported,
         onUpdate,
+        onUsage,
         shouldStop: () => stopRef.current,
       });
     } catch (error) {
