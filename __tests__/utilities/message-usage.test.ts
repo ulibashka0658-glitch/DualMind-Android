@@ -18,6 +18,11 @@ describe('readMessageUsage', () => {
       fx: { rubPerUsd: 90, asOf: '2026-11-22', source: 'manual' },
     });
   });
+  it('rejects missing counts rather than displaying NaN', () => {
+    expect(readMessageUsage({ tokenUsage: { mode: 'cloud', usage: {
+      inputTokens: 10, source: 'provider',
+    } } })).toBeNull();
+  });
   it('rejects negative or invalid counts', () => {
     expect(readMessageUsage({ tokenUsage: { mode: 'local', usage: {
       inputTokens: -1, outputTokens: 0, source: 'local-engine',
