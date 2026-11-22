@@ -55,6 +55,12 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
     });
   }
 
+  const toggleArchive = () => {
+    setVisible(false);
+    if (root === node.id) setRoot(undefined);
+    setMappings(prev => updateContent<string, Record<string, any>>(prev, node.id, c => c, m => ({ ...m, archived: !m?.archived })));
+  };
+
   const deleteChat = () => {
     setVisible(false);
     Alert.alert("Удалить чат?", "Этот чат будет удалён без возможности восстановления.", [
@@ -145,6 +151,12 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
           onPress={exportChat}
         >
           <Text style={styles.popoverButton}>Экспортировать</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID={`${testID}-archive`}
+          onPress={toggleArchive}
+        >
+          <Text style={styles.popoverButton}>{node.metadata?.archived ? "Восстановить" : "В архив"}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`${testID}-delete`}
