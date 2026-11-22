@@ -2,6 +2,7 @@ import MessageContentView from "@/components/views/message/content-view";
 import MessageControlsView from "@/components/views/message/controls-view";
 import MessageRoleView from "@/components/views/message/role-view";
 import { TokenUsageDetails } from "@/components/TokenUsageDetails";
+import { readMessageUsage } from "@/lib/message-usage";
 import type { FxRate, TokenPricing, TokenUsage } from "@/lib/token-usage";
 import { MessageNode } from "message-nodes";
 import { useState } from "react";
@@ -23,6 +24,7 @@ function MessageView({
   usageData?: MessageUsageData | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const visibleUsage = usageData ?? readMessageUsage(message.metadata);
   const styles = StyleSheet.create({
     view: {
       flexDirection: "column",
@@ -45,12 +47,12 @@ function MessageView({
         <MessageControlsView message={message} />
       </View>
       <MessageContentView message={message} />
-      {message.role === "assistant" && usageData ? (
+      {message.role === "assistant" && visibleUsage ? (
         <TokenUsageDetails
-          usage={usageData.usage}
-          mode={usageData.mode}
-          pricing={usageData.pricing}
-          fx={usageData.fx}
+          usage={visibleUsage.usage}
+          mode={visibleUsage.mode}
+          pricing={visibleUsage.pricing}
+          fx={visibleUsage.fx}
           expanded={expanded}
           onToggle={() => setExpanded(value => !value)}
         />
