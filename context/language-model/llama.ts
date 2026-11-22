@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { readLlamaCompletionUsage } from "@/lib/llama-usage";
 import { DocumentPickerAsset, getDocumentAsync } from "expo-document-picker";
 import * as FileSystem from 'expo-file-system/legacy';
 import { initLlama, loadLlamaModelInfo, RNLlamaOAICompatibleMessage } from 'llama.rn';
@@ -193,7 +194,7 @@ export async function connectLlama(
 
   return {
     imagesSupported,
-    prompt: async ({ messages, onUpdate, parameters: sampling }) => {
+    prompt: async ({ messages, onUpdate, onUsage, parameters: sampling }) => {
       const bounded = (key: string, fallback: number, min: number, max: number) => {
         const value = sampling[key];
         return typeof value === "number" && Number.isFinite(value)
@@ -206,6 +207,8 @@ export async function connectLlama(
         messages: withRussianLanguageHint(parseMessages(messages), sampling.response_language)
       }, (data) => onUpdate(data.token)));
 
+      const usage = readLlamaCompletionUsage(result.timings);
+      if (usage) onUsage?.(usage);
       console.log('Timings:', result.timings);
     },
     stop: () => measureLlama("stop", () => llama.stopCompletion()),
