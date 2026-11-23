@@ -47,6 +47,7 @@ export function consumePendingPairingProof(
   challenge: PairingChallenge,
   signature: string,
   now = Date.now(),
+  retainChallenge = false,
 ): Promise<boolean> {
   return serialize(async () => {
     try {
@@ -56,7 +57,8 @@ export function consumePendingPairingProof(
       if (!validatePairingChallenge(saved, now) ||
           JSON.stringify(saved) !== JSON.stringify(challenge)) return false;
       if (!await verifyDevicePairingProof(challenge, signature, challenge.pairingId, now)) return false;
-      await SecureStore.deleteItemAsync(PENDING_KEY);
+      // Finalization keeps the identity durable until the grant is saved.
+      if (!retainChallenge) await SecureStore.deleteItemAsync(PENDING_KEY);
       return true;
     } catch {
       return false;
