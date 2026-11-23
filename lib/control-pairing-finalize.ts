@@ -1,0 +1,50 @@
+import type { ControlGrant } from './control-policy';
+import type { PairingConsent } from './control-pairing-consent';
+import type { PairingChallenge } from './control-pairing-proof';
+import { consumePendingPairingProof } from './control-pending-pairing';
+import { loadControlGrant, saveControlGrant } from './control-secure-store';
+
+let queue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Finalize ONLY after a trusted, out-of-band authenticated key exchange
+ * provisioned the shared key and the user explicitly approved the scopes.
+ * The UI preview must never call this directly.
+ */
+export function finalizeVerifiedPairing(
+  consent: PairingConsent,
+  challenge: PairingChallenge,
+  signature: string,
+  now = Date.now(),
+): Promise<{ ok: boolean; reason: string }> {
+  const task = queue.catch(() => undefined).then(async () => {
+    if (!consent || !challenge || consent.pairingId !== challenge.pairingId ||
+        !Number.isSafeInteger(now) || !Array.isArray(consent.approvedScopes) ||
+        !consent.approvedScopes.length || typeof consent.expiresAt !== 'string' ||
+        Date.parse(consent.expiresAt) <= now ||
+        consent.approvedScopes.some(scope => ![
+          'status:read', 'models:read', 'downloads:read', 'diagnostics:read',
+        ].includes(scope))) {
+      return { ok: false, reason: 'invalid-consent' };
+    }
+    try {
+      const existing = await loadControlGrant();
+      if (existing) return { ok: false, reason: 'existing-pairing' };
+      if (!await consumePendingPairingProof(challenge, signature, now)) {
+        return { ok: false, reason: 'proof-rejected' };
+      }
+      const grant: ControlGrant = {
+        pairingId: consent.pairingId,
+        scopes: [...new Set(consent.approvedScopes)],
+        expiresAt: consent.expiresAt,
+        revoked: false,
+      };
+      await saveControlGrant(grant);
+      return { ok: true, reason: 'paired' };
+    } catch {
+      return { ok: false, reason: 'secure-storage-unavailable' };
+    }
+  });
+  queue = task;
+  return task;
+}
