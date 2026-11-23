@@ -1,7 +1,7 @@
 jest.mock('../../lib/control-pairing-recovery', () => ({ getStoredPendingPairingId: jest.fn() }));
 jest.mock('../../lib/control-replay-store', () => ({ clearControlReplayHistory: jest.fn() }));
 jest.mock('../../lib/control-pairing-local-approval', () => ({
-  cancelLocalPairingApproval: jest.fn(),
+  clearLocalPairingApprovalRecords: jest.fn(),
 }));
 jest.mock('../../lib/control-hmac', () => ({ removeControlHmacKey: jest.fn() }));
 jest.mock('../../lib/control-secure-store', () => ({
@@ -11,14 +11,14 @@ jest.mock('../../lib/control-secure-store', () => ({
 
 import { getStoredPendingPairingId } from '../../lib/control-pairing-recovery';
 import { clearControlReplayHistory } from '../../lib/control-replay-store';
-import { cancelLocalPairingApproval } from '../../lib/control-pairing-local-approval';
+import { clearLocalPairingApprovalRecords } from '../../lib/control-pairing-local-approval';
 import { removeControlHmacKey } from '../../lib/control-hmac';
 import { clearControlGrant, loadControlGrant } from '../../lib/control-secure-store';
 import { disconnectControlPairing, inspectControlCrypto } from '../../lib/control-lifecycle';
 
 const pendingStatus = getStoredPendingPairingId as jest.Mock;
 const clearReplay = clearControlReplayHistory as jest.Mock;
-const cancelPending = cancelLocalPairingApproval as jest.Mock;
+const cancelPending = clearLocalPairingApprovalRecords as jest.Mock;
 const load = loadControlGrant as jest.Mock;
 const remove = removeControlHmacKey as jest.Mock;
 const clear = clearControlGrant as jest.Mock;
