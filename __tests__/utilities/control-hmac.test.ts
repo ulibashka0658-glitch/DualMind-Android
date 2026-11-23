@@ -12,6 +12,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { getLocalPairingApprovalStatus } from '../../lib/control-pairing-recovery';
 import { loadControlGrant } from '../../lib/control-secure-store';
+import { runPairingMutation } from '../../lib/control-pairing-mutex';
 import { generateDevicePairingSecret, provisionControlHmacKey, removeControlHmacKey, verifyControlHmac } from '../../lib/control-hmac';
 
 const key = Buffer.alloc(32, 7).toString('base64');
@@ -59,6 +60,22 @@ describe('device-bound HMAC verification', () => {
     release();
     await Promise.all([provisioning, deletion]);
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('dualmind-control-hmac-v1-pair-1');
+  });
+
+  it('holds the lifecycle lock until provisioning finishes', async () => {
+    let release!: () => void;
+    const events: string[] = [];
+    (SecureStore.setItemAsync as jest.Mock).mockImplementationOnce(() =>
+      new Promise<void>(resolve => { release = resolve; }),
+    );
+    const provisioning = provisionControlHmacKey('pair-1', key);
+    for (let i = 0; i < 40 && !release; i++) await Promise.resolve();
+    expect(release).toBeDefined();
+    const next = runPairingMutation(async () => { events.push('next'); });
+    expect(events).toEqual([]);
+    release();
+    await Promise.all([provisioning, next]);
+    expect(events).toEqual(['next']);
   });
 
   it('rejects provisioning without a live locally approved pairing', async () => {
