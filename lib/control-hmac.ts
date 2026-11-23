@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Buffer } from 'buffer';
 import * as Crypto from 'expo-crypto';
 import type { VerifyControlSignature } from './control-signed-request';
+import { getLocalPairingApprovalStatus } from './control-pairing-recovery';
 
 const KEY_PREFIX = 'dualmind-control-hmac-v1-';
 let provisionQueue: Promise<unknown> = Promise.resolve();
@@ -42,6 +43,11 @@ export async function provisionControlHmacKey(pairingId: string, base64Secret: s
   }
   // Serialize local provisioning so two callers cannot both observe an empty slot.
   const task = provisionQueue.catch(() => undefined).then(async () => {
+    // A secret may be provisioned only for an active, locally approved request.
+    const pending = await getLocalPairingApprovalStatus();
+    if (!pending || pending.consent.pairingId !== pairingId) {
+      throw new Error('Local pairing approval required');
+    }
     const existing = await SecureStore.getItemAsync(KEY_PREFIX + pairingId);
     if (existing !== null) throw new Error('Pairing key already exists');
     await SecureStore.setItemAsync(KEY_PREFIX + pairingId, base64Secret, {
