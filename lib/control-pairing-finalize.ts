@@ -1,7 +1,7 @@
 import type { ControlGrant } from './control-policy';
 import type { PairingConsent } from './control-pairing-consent';
 import type { PairingChallenge } from './control-pairing-proof';
-import { consumePendingPairingProof } from './control-pending-pairing';
+import { consumePendingPairingProof, cancelPendingPairingChallenge } from './control-pending-pairing';
 import { removeControlHmacKey } from './control-hmac';
 import { runPairingMutation } from './control-pairing-mutex';
 import { loadControlGrant, saveControlGrant } from './control-secure-store';
@@ -36,7 +36,7 @@ export function finalizeVerifiedPairing(
       }
       const existing = await loadControlGrant();
       if (existing) return { ok: false, reason: 'existing-pairing' };
-      if (!await consumePendingPairingProof(challenge, signature, now)) {
+      if (!await consumePendingPairingProof(challenge, signature, now, true)) {
         return { ok: false, reason: 'proof-rejected' };
       }
       const grant: ControlGrant = {
@@ -58,11 +58,13 @@ export function finalizeVerifiedPairing(
         return { ok: false, reason: 'grant-save-failed-key-removed' };
       }
       try {
+        // The grant is durable before the challenge identity is removed.
         await clearBoundPairingConsent();
+        await cancelPendingPairingChallenge();
       } catch {
         // Access has been saved, so report failure rather than silently
         // claiming that cleanup completed. A retry will reject existing grant.
-        return { ok: false, reason: 'consent-cleanup-failed' };
+        return { ok: false, reason: 'pairing-cleanup-failed' };
       }
       return { ok: true, reason: 'paired' };
     } catch {
