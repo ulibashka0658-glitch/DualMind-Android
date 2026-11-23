@@ -32,3 +32,22 @@ export async function getLocalPairingApprovalStatus(
     return null;
   }
 }
+
+/**
+ * Disconnect-only lookup. Expired challenges still identify an orphaned key
+ * that must be destroyed. Storage errors propagate so disconnect fails closed.
+ * Never return the challenge nonce or treat this as active consent.
+ */
+export async function getStoredPendingPairingId(): Promise<string | null> {
+  const raw = await SecureStore.getItemAsync(PENDING_KEY);
+  if (!raw) return null;
+  const parsed: unknown = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid pending pairing record');
+  }
+  const id = (parsed as Record<string, unknown>).pairingId;
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(id)) {
+    throw new Error('Invalid pending pairing identity');
+  }
+  return id;
+}
