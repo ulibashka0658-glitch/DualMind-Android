@@ -63,6 +63,7 @@ export default function ControlPairingPreview() {
         </Pressable>
         {!!error && <Text style={styles.error}>{error}</Text>}
         {consented ? (
+          <View>
             <Text style={styles.warning}>На устройстве есть ожидающее согласие до {challengeExpires}. Удалённый доступ не включён.</Text>
             <Pressable accessibilityRole="button" disabled={busy} onPress={async () => {
               setBusy(true);
@@ -78,9 +79,11 @@ export default function ControlPairingPreview() {
             }}>
               <Text style={styles.action}>Отменить локальное согласие</Text>
             </Pressable>
+          </View>
         ) : null}
 
         {preview ? (
+          <View>
           <Text style={styles.note}>Идентификатор: {preview.pairingId}</Text>
           <Text style={styles.note}>Действует до: {preview.expiresAt}</Text>
           <Text style={styles.note}>Запрошенные разрешения:</Text>
@@ -104,6 +107,7 @@ export default function ControlPairingPreview() {
             <Text style={styles.action}>{busy ? 'Сохранение...' : 'Подтвердить и сохранить разрешения на устройстве'}</Text>
           </Pressable>
           <Text style={styles.warning}>Подключение не активировано. Для подтверждения необходим защищённый обмен ключами.</Text>
+          </View>
         ) : null}
       </View>}
     </View>
