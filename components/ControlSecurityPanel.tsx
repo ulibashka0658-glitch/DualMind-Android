@@ -91,7 +91,7 @@ export default function ControlSecurityPanel() {
             <Text style={styles.danger}>Отключить привязку и удалить ключ</Text>
           </Pressable>}
         </>}
-        {!loading && !error && recovery && (recovery.state === 'unpaired' || recovery.state === 'pending' || recovery.state === 'paired') && <ControlPairingPreview />}
+        {!loading && !error && recovery?.state === 'unpaired' && status?.paired === false && <ControlPairingPreview />}
         {recovery?.state === 'storage-unavailable' && <Text style={styles.error}>Проверьте доступность защищённого хранилища и повторите проверку. Автоматическое удаление отключено.</Text>}
         <Pressable accessibilityRole="button" disabled={loading} onPress={() => void refresh()}>
           <Text style={styles.action}>Обновить состояние</Text>
