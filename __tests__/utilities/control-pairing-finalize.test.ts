@@ -15,6 +15,7 @@ import { removeControlHmacKey } from '../../lib/control-hmac';
 import { consumePendingPairingProof } from '../../lib/control-pending-pairing';
 import { loadControlGrant, saveControlGrant } from '../../lib/control-secure-store';
 import { finalizeVerifiedPairing } from '../../lib/control-pairing-finalize';
+import { runPairingMutation } from '../../lib/control-pairing-mutex';
 import { loadBoundPairingConsent, clearBoundPairingConsent } from '../../lib/control-pairing-consent-store';
 
 const removeKey = removeControlHmacKey as jest.Mock;
@@ -38,6 +39,22 @@ describe('verified pairing finalization', () => {
     save.mockResolvedValue(undefined);
     removeKey.mockResolvedValue(undefined);
   });
+  it('holds the shared lifecycle lock until the grant is persisted', async () => {
+    let release!: () => void;
+    const events: string[] = [];
+    save.mockImplementationOnce(() => new Promise<void>(resolve => {
+      release = () => { events.push('grant-saved'); resolve(); };
+    }));
+    const finalizing = finalizeVerifiedPairing(consent, challenge, 'signature', now);
+    for (let i = 0; i < 30 && !release; i++) await Promise.resolve();
+    expect(release).toBeDefined();
+    const nextMutation = runPairingMutation(async () => { events.push('next-mutation'); });
+    expect(events).toEqual([]);
+    release();
+    await Promise.all([finalizing, nextMutation]);
+    expect(events).toEqual(['grant-saved', 'next-mutation']);
+  });
+
   it('persists only approved scopes after successful proof', async () => {
     expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now)).toEqual({ ok: true, reason: 'paired' });
     expect(proof).toHaveBeenCalledTimes(1);
