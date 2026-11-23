@@ -64,7 +64,12 @@ export async function provisionControlHmacKey(pairingId: string, base64Secret: s
 
 export async function removeControlHmacKey(pairingId: string): Promise<void> {
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(pairingId)) throw new Error('Invalid pairing ID');
-  await SecureStore.deleteItemAsync(KEY_PREFIX + pairingId);
+  // Share the provisioning queue: a late provision cannot race key deletion.
+  const task = provisionQueue.catch(() => undefined).then(() =>
+    SecureStore.deleteItemAsync(KEY_PREFIX + pairingId),
+  );
+  provisionQueue = task;
+  await task;
 }
 
 /**
