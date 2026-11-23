@@ -37,7 +37,10 @@ export function prepareLocalPairingApproval(
     return challenge;
   } catch (error) {
     // Invalidate both records on any partial write; propagate cleanup failure.
-    await Promise.all([cancelPendingPairingChallenge(), clearBoundPairingConsent()]);
+    // Keep the challenge (and its pairing ID) until consent deletion succeeds.
+  // A crash between writes must still leave the key discoverable for cleanup.
+  await clearBoundPairingConsent();
+  await cancelPendingPairingChallenge();
     throw error;
   }
   });
