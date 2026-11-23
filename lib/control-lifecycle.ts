@@ -3,13 +3,15 @@ import { clearControlGrant, loadControlGrant } from './control-secure-store';
 import { cancelLocalPairingApproval } from './control-pairing-local-approval';
 import { clearControlReplayHistory } from './control-replay-store';
 import { getLocalPairingApprovalStatus } from './control-pairing-recovery';
+import { runPairingMutation } from './control-pairing-mutex';
 
 /**
  * Revoke device access locally. Delete the key FIRST so a storage failure
  * cannot leave an active cryptographic credential after reporting success.
  * If deletion fails, the operation rejects and the UI must show an error.
  */
-export async function disconnectControlPairing(): Promise<void> {
+export function disconnectControlPairing(): Promise<void> {
+  return runPairingMutation(async () => {
   const grant = await loadControlGrant();
   // An interrupted pairing can leave a key without a saved grant. Revoke
   // that credential as well before clearing the pending approval records.
@@ -24,6 +26,7 @@ export async function disconnectControlPairing(): Promise<void> {
   await cancelLocalPairingApproval();
   // Safe only after deleting the old HMAC key. New pairings require fresh keys.
   await clearControlReplayHistory();
+  });
 }
 
 /** Report capability without creating, exporting, or storing a secret. */
