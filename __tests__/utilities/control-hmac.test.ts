@@ -1,3 +1,4 @@
+jest.mock('expo-crypto', () => ({ getRandomBytesAsync: jest.fn() }));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
@@ -6,7 +7,8 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import * as SecureStore from 'expo-secure-store';
-import { provisionControlHmacKey, removeControlHmacKey, verifyControlHmac } from '../../lib/control-hmac';
+import * as Crypto from 'expo-crypto';
+import { generateDevicePairingSecret, provisionControlHmacKey, removeControlHmacKey, verifyControlHmac } from '../../lib/control-hmac';
 
 const key = Buffer.alloc(32, 7).toString('base64');
 const signature = Buffer.alloc(32, 9).toString('base64');
@@ -47,6 +49,18 @@ describe('device-bound HMAC verification', () => {
     (SecureStore.getItemAsync as jest.Mock).mockRejectedValueOnce(new Error('locked'));
     await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('locked');
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('generates a 32-byte base64 secret using platform secure randomness', async () => {
+    (Crypto.getRandomBytesAsync as jest.Mock).mockResolvedValueOnce(new Uint8Array(32).fill(11));
+    const secret = await generateDevicePairingSecret();
+    expect(Buffer.from(secret, 'base64')).toEqual(Buffer.alloc(32, 11));
+    expect(Crypto.getRandomBytesAsync).toHaveBeenCalledWith(32);
+  });
+
+  it('rejects invalid random output rather than provisioning a weak key', async () => {
+    (Crypto.getRandomBytesAsync as jest.Mock).mockResolvedValueOnce(new Uint8Array(16));
+    await expect(generateDevicePairingSecret()).rejects.toThrow('Invalid secure random output');
   });
 
   it('rejects when platform cryptography or secure storage is unavailable', async () => {
