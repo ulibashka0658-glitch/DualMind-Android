@@ -87,7 +87,7 @@ export default function ControlPairingPreview() {
           </View>
         ) : null}
 
-        {preview ? (
+        {preview && !consented ? (
           <View>
           <Text style={styles.note}>Идентификатор: {preview.pairingId}</Text>
           <Text style={styles.note}>Действует до: {preview.expiresAt}</Text>
