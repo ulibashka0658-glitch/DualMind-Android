@@ -1,3 +1,4 @@
+jest.mock('../../lib/control-pairing-recovery', () => ({ getLocalPairingApprovalStatus: jest.fn() }));
 jest.mock('expo-crypto', () => ({ getRandomBytesAsync: jest.fn() }));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
@@ -8,6 +9,7 @@ jest.mock('expo-secure-store', () => ({
 
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
+import { getLocalPairingApprovalStatus } from '../../lib/control-pairing-recovery';
 import { generateDevicePairingSecret, provisionControlHmacKey, removeControlHmacKey, verifyControlHmac } from '../../lib/control-hmac';
 
 const key = Buffer.alloc(32, 7).toString('base64');
@@ -17,6 +19,7 @@ describe('device-bound HMAC verification', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+    (getLocalPairingApprovalStatus as jest.Mock).mockResolvedValue({ consent: { pairingId: 'pair-1' } });
   });
 
   it('rejects missing and invalid pairing identities', async () => {
@@ -37,6 +40,18 @@ describe('device-bound HMAC verification', () => {
     );
     await removeControlHmacKey('pair-1');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('dualmind-control-hmac-v1-pair-1');
+  });
+
+  it('rejects provisioning without a live locally approved pairing', async () => {
+    (getLocalPairingApprovalStatus as jest.Mock).mockResolvedValueOnce(null);
+    await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('Local pairing approval required');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects provisioning for another pairing identity', async () => {
+    (getLocalPairingApprovalStatus as jest.Mock).mockResolvedValueOnce({ consent: { pairingId: 'different' } });
+    await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('Local pairing approval required');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
   });
 
   it('refuses to overwrite an existing key for the same pairing', async () => {
