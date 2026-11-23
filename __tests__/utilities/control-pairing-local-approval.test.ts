@@ -1,3 +1,5 @@
+jest.mock('../../lib/control-pairing-recovery', () => ({ getStoredPendingPairingId: jest.fn() }));
+jest.mock('../../lib/control-hmac', () => ({ removeControlHmacKey: jest.fn() }));
 jest.mock('../../lib/control-secure-store', () => ({
   loadControlGrant: jest.fn(),
 }));
@@ -10,11 +12,15 @@ jest.mock('../../lib/control-pairing-consent-store', () => ({
   clearBoundPairingConsent: jest.fn(),
 }));
 
+import { getStoredPendingPairingId } from '../../lib/control-pairing-recovery';
+import { removeControlHmacKey } from '../../lib/control-hmac';
 import { loadControlGrant } from '../../lib/control-secure-store';
 import { createPendingPairingChallenge, cancelPendingPairingChallenge } from '../../lib/control-pending-pairing';
 import { storeLocalPairingConsent, clearBoundPairingConsent } from '../../lib/control-pairing-consent-store';
 import { prepareLocalPairingApproval, cancelLocalPairingApproval } from '../../lib/control-pairing-local-approval';
 
+const pendingId = getStoredPendingPairingId as jest.Mock;
+const removeKey = removeControlHmacKey as jest.Mock;
 const loadGrant = loadControlGrant as jest.Mock;
 const create = createPendingPairingChallenge as jest.Mock;
 const cancel = cancelPendingPairingChallenge as jest.Mock;
@@ -33,6 +39,8 @@ describe('local pairing approval', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     loadGrant.mockResolvedValue(null);
+    pendingId.mockResolvedValue(null);
+    removeKey.mockResolvedValue(undefined);
     create.mockResolvedValue(challenge);
     store.mockResolvedValue(undefined);
     clear.mockResolvedValue(undefined);
@@ -46,6 +54,27 @@ describe('local pairing approval', () => {
       approvedScopes: ['status:read'],
       expiresAt: request.expiresAt,
     }, challenge, now);
+  });
+  it('destroys previous pending key before replacing the challenge', async () => {
+    const events: string[] = [];
+    pendingId.mockResolvedValueOnce('old-pairing-id-12345');
+    removeKey.mockImplementationOnce(async () => { events.push('key'); });
+    create.mockImplementationOnce(async () => { events.push('challenge'); return challenge; });
+    await prepareLocalPairingApproval(request, ['status:read'], now);
+    expect(removeKey).toHaveBeenCalledWith('old-pairing-id-12345');
+    expect(events).toEqual(['key', 'challenge']);
+  });
+  it('does not replace challenge if old key cannot be removed', async () => {
+    pendingId.mockResolvedValueOnce('old-pairing-id-12345');
+    removeKey.mockRejectedValueOnce(new Error('key locked'));
+    await expect(prepareLocalPairingApproval(request, ['status:read'], now)).rejects.toThrow('key locked');
+    expect(clear).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+  it('does not replace challenge when pending storage cannot be read', async () => {
+    pendingId.mockRejectedValueOnce(new Error('storage locked'));
+    await expect(prepareLocalPairingApproval(request, ['status:read'], now)).rejects.toThrow('storage locked');
+    expect(create).not.toHaveBeenCalled();
   });
   it('rejects unrequested scopes before generating challenge', async () => {
     await expect(prepareLocalPairingApproval(request, ['downloads:read'], now)).rejects.toThrow();
