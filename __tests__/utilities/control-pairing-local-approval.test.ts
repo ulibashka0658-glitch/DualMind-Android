@@ -1,3 +1,6 @@
+jest.mock('../../lib/control-secure-store', () => ({
+  loadControlGrant: jest.fn(),
+}));
 jest.mock('../../lib/control-pending-pairing', () => ({
   createPendingPairingChallenge: jest.fn(),
   cancelPendingPairingChallenge: jest.fn(),
@@ -7,10 +10,12 @@ jest.mock('../../lib/control-pairing-consent-store', () => ({
   clearBoundPairingConsent: jest.fn(),
 }));
 
+import { loadControlGrant } from '../../lib/control-secure-store';
 import { createPendingPairingChallenge, cancelPendingPairingChallenge } from '../../lib/control-pending-pairing';
 import { storeLocalPairingConsent, clearBoundPairingConsent } from '../../lib/control-pairing-consent-store';
 import { prepareLocalPairingApproval, cancelLocalPairingApproval } from '../../lib/control-pairing-local-approval';
 
+const loadGrant = loadControlGrant as jest.Mock;
 const create = createPendingPairingChallenge as jest.Mock;
 const cancel = cancelPendingPairingChallenge as jest.Mock;
 const store = storeLocalPairingConsent as jest.Mock;
@@ -27,6 +32,7 @@ const challenge = { version: 1, pairingId: request.pairingId, nonce: 'nonce', cr
 describe('local pairing approval', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    loadGrant.mockResolvedValue(null);
     create.mockResolvedValue(challenge);
     store.mockResolvedValue(undefined);
     clear.mockResolvedValue(undefined);
@@ -50,6 +56,18 @@ describe('local pairing approval', () => {
     await expect(prepareLocalPairingApproval(request, ['status:read'], now)).rejects.toThrow();
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(clear).toHaveBeenCalledTimes(2);
+  });
+  it('rejects a second pairing while any grant exists', async () => {
+    loadGrant.mockResolvedValueOnce({ pairingId: 'existing', revoked: false });
+    await expect(prepareLocalPairingApproval(request, ['status:read'], now)).rejects.toThrow('Disconnect existing pairing first');
+    expect(clear).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(store).not.toHaveBeenCalled();
+  });
+  it('fails closed when reading existing grant fails', async () => {
+    loadGrant.mockRejectedValueOnce(new Error('secure storage locked'));
+    await expect(prepareLocalPairingApproval(request, ['status:read'], now)).rejects.toThrow();
+    expect(create).not.toHaveBeenCalled();
   });
   it('cancels both pending records', async () => {
     await cancelLocalPairingApproval();
