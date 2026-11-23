@@ -3,6 +3,7 @@ import { Buffer } from 'buffer';
 import type { VerifyControlSignature } from './control-signed-request';
 
 const KEY_PREFIX = 'dualmind-control-hmac-v1-';
+let provisionQueue: Promise<unknown> = Promise.resolve();
 
 /**
  * HMAC-SHA256 verification using platform WebCrypto when available.
@@ -38,9 +39,16 @@ export async function provisionControlHmacKey(pairingId: string, base64Secret: s
       Buffer.from(base64Secret, 'base64').length !== 32) {
     throw new Error('Invalid pairing key');
   }
-  await SecureStore.setItemAsync(KEY_PREFIX + pairingId, base64Secret, {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  // Serialize local provisioning so two callers cannot both observe an empty slot.
+  const task = provisionQueue.catch(() => undefined).then(async () => {
+    const existing = await SecureStore.getItemAsync(KEY_PREFIX + pairingId);
+    if (existing !== null) throw new Error('Pairing key already exists');
+    await SecureStore.setItemAsync(KEY_PREFIX + pairingId, base64Secret, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
   });
+  provisionQueue = task;
+  await task;
 }
 
 export async function removeControlHmacKey(pairingId: string): Promise<void> {
