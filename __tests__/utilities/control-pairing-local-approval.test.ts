@@ -114,6 +114,18 @@ describe('local pairing approval', () => {
     expect(cancel).not.toHaveBeenCalled();
     expect(clear).not.toHaveBeenCalled();
   });
+  it('retains the challenge identity if consent cleanup fails', async () => {
+    clear.mockRejectedValueOnce(new Error('consent locked'));
+    await expect(cancelLocalPairingApproval()).rejects.toThrow('consent locked');
+    expect(cancel).not.toHaveBeenCalled();
+  });
+  it('clears consent before removing the challenge identity', async () => {
+    const events: string[] = [];
+    clear.mockImplementationOnce(async () => { events.push('consent'); });
+    cancel.mockImplementationOnce(async () => { events.push('challenge'); });
+    await cancelLocalPairingApproval();
+    expect(events).toEqual(['consent', 'challenge']);
+  });
   it('cancels both pending records', async () => {
     await cancelLocalPairingApproval();
     expect(cancel).toHaveBeenCalledTimes(1);
