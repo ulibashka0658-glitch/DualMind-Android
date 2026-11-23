@@ -1,0 +1,36 @@
+import type { ControlScope } from './control-policy';
+import type { PairingRequest } from './control-pairing';
+import type { PairingChallenge } from './control-pairing-proof';
+import { preparePairingConsent } from './control-pairing-consent';
+import { createPendingPairingChallenge, cancelPendingPairingChallenge } from './control-pending-pairing';
+import { storeLocalPairingConsent, clearBoundPairingConsent } from './control-pairing-consent-store';
+
+/**
+ * Called only from a local, explicit approval gesture.
+ * Store the exact selected scopes bound to a fresh device-generated challenge.
+ * No remote connection or access grant is created.
+ */
+export async function prepareLocalPairingApproval(
+  request: PairingRequest,
+  selectedScopes: readonly ControlScope[],
+  now = Date.now(),
+): Promise<PairingChallenge> {
+  if (!Number.isSafeInteger(now)) throw new Error('Invalid approval time');
+  const consent = preparePairingConsent(request, selectedScopes, new Date(now).toISOString());
+  if (!consent) throw new Error('Invalid or expired pairing consent');
+  // Clear previous approval before replacing the pending challenge.
+  await clearBoundPairingConsent();
+  const challenge = await createPendingPairingChallenge(consent.pairingId, now);
+  try {
+    await storeLocalPairingConsent(consent, challenge, now);
+    return challenge;
+  } catch (error) {
+    // Invalidate both records on any partial write; propagate cleanup failure.
+    await Promise.all([cancelPendingPairingChallenge(), clearBoundPairingConsent()]);
+    throw error;
+  }
+}
+
+export async function cancelLocalPairingApproval(): Promise<void> {
+  await Promise.all([cancelPendingPairingChallenge(), clearBoundPairingConsent()]);
+}
