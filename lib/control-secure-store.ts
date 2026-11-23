@@ -15,13 +15,16 @@ export async function loadControlGrant(): Promise<ControlGrant | null> {
   if (!raw) return null;
   try {
     const value: unknown = JSON.parse(raw);
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid stored control grant');
     const record = value as Record<string, unknown>;
     const allowed = ['status:read', 'models:read', 'downloads:read', 'diagnostics:read'];
-    if (typeof record.pairingId !== 'string' || !record.pairingId.trim() ||
+    if (typeof record.pairingId !== 'string' || !/^[A-Za-z0-9_-]{16,128}$/.test(record.pairingId) ||
         typeof record.expiresAt !== 'string' || !Number.isFinite(Date.parse(record.expiresAt)) ||
         typeof record.revoked !== 'boolean' || !Array.isArray(record.scopes) ||
-        !record.scopes.every(scope => typeof scope === 'string' && allowed.includes(scope))) return null;
+        !record.scopes.length ||
+        !record.scopes.every(scope => typeof scope === 'string' && allowed.includes(scope))) {
+      throw new Error('Invalid stored control grant');
+    }
     return {
       pairingId: record.pairingId,
       expiresAt: record.expiresAt,
@@ -29,7 +32,9 @@ export async function loadControlGrant(): Promise<ControlGrant | null> {
       scopes: record.scopes,
     } as ControlGrant;
   } catch {
-    return null;
+    // A present but unreadable record must never be mistaken for an empty slot.
+    // Otherwise a second pairing or key deletion could proceed unsafely.
+    throw new Error('Unreadable stored control grant');
   }
 }
 
