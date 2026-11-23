@@ -48,8 +48,19 @@ export function finalizeVerifiedPairing(
       try {
         await saveControlGrant(grant);
       } catch {
-        // The proof was consumed but no grant could be saved. Remove the
-        // provisioned secret so it cannot linger as an orphaned credential.
+        // A rejected SecureStore write may have committed before reporting an
+        // error. Never destroy a key while the grant's persistence is unknown.
+        let persisted: ControlGrant | null;
+        try {
+          persisted = await loadControlGrant();
+        } catch {
+          return { ok: false, reason: 'grant-write-uncertain' };
+        }
+        if (persisted) {
+          // Whether matching or conflicting, do not delete credentials while
+          // a persisted grant exists. Require explicit local reconciliation.
+          return { ok: false, reason: 'grant-write-uncertain' };
+        }
         try {
           await removeControlHmacKey(consent.pairingId);
         } catch {
