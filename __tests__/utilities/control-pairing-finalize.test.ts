@@ -82,6 +82,26 @@ describe('verified pairing finalization', () => {
     expect(cancelChallenge).not.toHaveBeenCalled();
     expect(removeKey).not.toHaveBeenCalled();
   });
+  it('does not complete pairing when readback differs from approved scopes', async () => {
+    save.mockImplementationOnce(async () => {
+      load.mockResolvedValue({ pairingId: id, scopes: ['models:read'], expiresAt: consent.expiresAt, revoked: false });
+    });
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: false, reason: 'grant-write-uncertain' });
+    expect(cancelChallenge).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+    expect(removeKey).not.toHaveBeenCalled();
+  });
+  it('does not complete pairing when readback fails after successful write', async () => {
+    save.mockImplementationOnce(async () => {
+      load.mockRejectedValue(new Error('locked'));
+    });
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: false, reason: 'grant-write-uncertain' });
+    expect(cancelChallenge).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+    expect(removeKey).not.toHaveBeenCalled();
+  });
   it('does not remove challenge when grant persistence fails', async () => {
     save.mockRejectedValueOnce(new Error('locked'));
     await finalizeVerifiedPairing(consent, challenge, 'signature', now);
