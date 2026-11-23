@@ -10,7 +10,8 @@ export function usageEntriesFromMessages(mappings: Record<string, MessageNode<st
     const saved = readMessageUsage(message.metadata);
     if (!saved) continue;
     const metadata = message.metadata as Record<string, unknown>;
-    const rawTimestamp = metadata.updateTime ?? metadata.createTime;
+    // Attribute usage to the original response date, not its last edit.
+    const rawTimestamp = metadata.createTime ?? metadata.updateTime;
     const timestamp = typeof rawTimestamp === 'string' && !Number.isNaN(Date.parse(rawTimestamp))
       ? rawTimestamp : '';
     entries.push({ id, ...saved, timestamp });
