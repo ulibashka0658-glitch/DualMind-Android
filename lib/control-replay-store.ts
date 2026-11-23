@@ -45,3 +45,14 @@ export function consumeAuthenticatedNonce(
   queue = task;
   return task;
 }
+
+/**
+ * Purge replay metadata only after the old authentication key is destroyed.
+ * Use the same queue as nonce consumption to prevent local read/write races.
+ * Re-pairing must always provision a NEW independent secret.
+ */
+export function clearControlReplayHistory(): Promise<void> {
+  const task = queue.catch(() => undefined).then(() => SecureStore.deleteItemAsync(REPLAY_KEY));
+  queue = task;
+  return task;
+}
