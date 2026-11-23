@@ -1,6 +1,10 @@
 jest.mock('../../lib/control-pending-pairing', () => ({
   consumePendingPairingProof: jest.fn(),
 }));
+jest.mock('../../lib/control-pairing-consent-store', () => ({
+  loadBoundPairingConsent: jest.fn(),
+  clearBoundPairingConsent: jest.fn(),
+}));
 jest.mock('../../lib/control-secure-store', () => ({
   loadControlGrant: jest.fn(),
   saveControlGrant: jest.fn(),
@@ -9,7 +13,10 @@ jest.mock('../../lib/control-secure-store', () => ({
 import { consumePendingPairingProof } from '../../lib/control-pending-pairing';
 import { loadControlGrant, saveControlGrant } from '../../lib/control-secure-store';
 import { finalizeVerifiedPairing } from '../../lib/control-pairing-finalize';
+import { loadBoundPairingConsent, clearBoundPairingConsent } from '../../lib/control-pairing-consent-store';
 
+const bound = loadBoundPairingConsent as jest.Mock;
+const clear = clearBoundPairingConsent as jest.Mock;
 const proof = consumePendingPairingProof as jest.Mock;
 const load = loadControlGrant as jest.Mock;
 const save = saveControlGrant as jest.Mock;
@@ -22,6 +29,8 @@ describe('verified pairing finalization', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     proof.mockResolvedValue(true);
+    bound.mockResolvedValue(consent);
+    clear.mockResolvedValue(undefined);
     load.mockResolvedValue(null);
     save.mockResolvedValue(undefined);
   });
@@ -41,6 +50,13 @@ describe('verified pairing finalization', () => {
     expect((await finalizeVerifiedPairing({ ...consent, pairingId: 'other' }, challenge, 'signature', now)).ok).toBe(false);
     expect((await finalizeVerifiedPairing({ ...consent, expiresAt: new Date(now).toISOString() }, challenge, 'signature', now)).ok).toBe(false);
     expect(save).not.toHaveBeenCalled();
+  });
+  it('rejects unbound or modified local consent', async () => {
+    bound.mockResolvedValueOnce(null);
+    expect((await finalizeVerifiedPairing(consent, challenge, 'signature', now)).reason).toBe('consent-not-bound');
+    bound.mockResolvedValueOnce({ ...consent, approvedScopes: ['models:read'] });
+    expect((await finalizeVerifiedPairing(consent, challenge, 'signature', now)).reason).toBe('consent-not-bound');
+    expect(proof).not.toHaveBeenCalled();
   });
   it('rejects proof failure and existing pairing', async () => {
     proof.mockResolvedValueOnce(false);
