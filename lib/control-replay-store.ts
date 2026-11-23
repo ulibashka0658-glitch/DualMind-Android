@@ -26,7 +26,7 @@ export function consumeAuthenticatedNonce(
         }
         const entries = Object.entries(parsed);
         if (entries.length > 20000 || entries.some(([key, value]) =>
-          key.length > 600 || !Number.isSafeInteger(value))) {
+          key.length > 600 || typeof value !== 'number' || !Number.isSafeInteger(value))) {
           return { allowed: false, reason: 'invalid-storage' };
         }
         state = parsed as ReplayState;
