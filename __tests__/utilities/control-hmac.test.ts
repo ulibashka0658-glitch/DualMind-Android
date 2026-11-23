@@ -1,3 +1,4 @@
+jest.mock('../../lib/control-secure-store', () => ({ loadControlGrant: jest.fn() }));
 jest.mock('../../lib/control-pairing-recovery', () => ({ getLocalPairingApprovalStatus: jest.fn() }));
 jest.mock('expo-crypto', () => ({ getRandomBytesAsync: jest.fn() }));
 jest.mock('expo-secure-store', () => ({
@@ -10,6 +11,7 @@ jest.mock('expo-secure-store', () => ({
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { getLocalPairingApprovalStatus } from '../../lib/control-pairing-recovery';
+import { loadControlGrant } from '../../lib/control-secure-store';
 import { generateDevicePairingSecret, provisionControlHmacKey, removeControlHmacKey, verifyControlHmac } from '../../lib/control-hmac';
 
 const key = Buffer.alloc(32, 7).toString('base64');
@@ -20,6 +22,7 @@ describe('device-bound HMAC verification', () => {
     jest.clearAllMocks();
     (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
     (getLocalPairingApprovalStatus as jest.Mock).mockResolvedValue({ consent: { pairingId: 'pair-1' } });
+    (loadControlGrant as jest.Mock).mockResolvedValue(null);
   });
 
   it('rejects missing and invalid pairing identities', async () => {
@@ -51,6 +54,18 @@ describe('device-bound HMAC verification', () => {
   it('rejects provisioning for another pairing identity', async () => {
     (getLocalPairingApprovalStatus as jest.Mock).mockResolvedValueOnce({ consent: { pairingId: 'different' } });
     await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('Local pairing approval required');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('rejects provisioning if any prior grant still exists', async () => {
+    (loadControlGrant as jest.Mock).mockResolvedValueOnce({ pairingId: 'old-pair', revoked: true });
+    await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('Disconnect existing pairing first');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when grant storage cannot be read', async () => {
+    (loadControlGrant as jest.Mock).mockRejectedValueOnce(new Error('storage locked'));
+    await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('storage locked');
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
   });
 
