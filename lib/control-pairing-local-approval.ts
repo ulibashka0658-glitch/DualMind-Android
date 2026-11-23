@@ -4,6 +4,8 @@ import type { PairingChallenge } from './control-pairing-proof';
 import { preparePairingConsent } from './control-pairing-consent';
 import { loadControlGrant } from './control-secure-store';
 import { runPairingMutation } from './control-pairing-mutex';
+import { getStoredPendingPairingId } from './control-pairing-recovery';
+import { removeControlHmacKey } from './control-hmac';
 import { createPendingPairingChallenge, cancelPendingPairingChallenge } from './control-pending-pairing';
 import { storeLocalPairingConsent, clearBoundPairingConsent } from './control-pairing-consent-store';
 
@@ -24,7 +26,10 @@ export function prepareLocalPairingApproval(
   // Never stage a second pairing over an existing grant. Require explicit
   // disconnection first, including for expired or revoked grants.
   if (await loadControlGrant()) throw new Error('Disconnect existing pairing first');
-  // Clear previous approval before replacing the pending challenge.
+  // An interrupted earlier approval may have provisioned a key. Destroy it
+  // BEFORE overwriting its only durable pairing identifier, even if expired.
+  const previousPairingId = await getStoredPendingPairingId();
+  if (previousPairingId) await removeControlHmacKey(previousPairingId);
   await clearBoundPairingConsent();
   const challenge = await createPendingPairingChallenge(consent.pairingId, now);
   try {
