@@ -1,5 +1,6 @@
 import { removeControlHmacKey } from './control-hmac';
 import { clearControlGrant, loadControlGrant } from './control-secure-store';
+import { cancelLocalPairingApproval } from './control-pairing-local-approval';
 
 /**
  * Revoke device access locally. Delete the key FIRST so a storage failure
@@ -10,6 +11,9 @@ export async function disconnectControlPairing(): Promise<void> {
   const grant = await loadControlGrant();
   if (grant) await removeControlHmacKey(grant.pairingId);
   await clearControlGrant();
+  // Also invalidate an unfinished approval so it cannot survive disconnect.
+  // Cleanup failures are surfaced to the UI, never reported as success.
+  await cancelLocalPairingApproval();
 }
 
 /** Report capability without creating, exporting, or storing a secret. */
