@@ -1,3 +1,4 @@
+jest.mock('../../lib/control-replay-store', () => ({ clearControlReplayHistory: jest.fn() }));
 jest.mock('../../lib/control-pairing-local-approval', () => ({
   cancelLocalPairingApproval: jest.fn(),
 }));
@@ -7,11 +8,13 @@ jest.mock('../../lib/control-secure-store', () => ({
   clearControlGrant: jest.fn(),
 }));
 
+import { clearControlReplayHistory } from '../../lib/control-replay-store';
 import { cancelLocalPairingApproval } from '../../lib/control-pairing-local-approval';
 import { removeControlHmacKey } from '../../lib/control-hmac';
 import { clearControlGrant, loadControlGrant } from '../../lib/control-secure-store';
 import { disconnectControlPairing, inspectControlCrypto } from '../../lib/control-lifecycle';
 
+const clearReplay = clearControlReplayHistory as jest.Mock;
 const cancelPending = cancelLocalPairingApproval as jest.Mock;
 const load = loadControlGrant as jest.Mock;
 const remove = removeControlHmacKey as jest.Mock;
@@ -27,6 +30,7 @@ describe('device control lifecycle', () => {
     remove.mockResolvedValue(undefined);
     clear.mockResolvedValue(undefined);
     cancelPending.mockResolvedValue(undefined);
+    clearReplay.mockResolvedValue(undefined);
   });
 
   it('destroys cryptographic key before deleting the grant', async () => {
@@ -36,6 +40,7 @@ describe('device control lifecycle', () => {
     await disconnectControlPairing();
     expect(calls).toEqual(['key', 'grant']);
     expect(cancelPending).toHaveBeenCalledTimes(1);
+    expect(clearReplay).toHaveBeenCalledTimes(1);
   });
 
   it('does not claim disconnection if key deletion fails', async () => {
@@ -43,6 +48,7 @@ describe('device control lifecycle', () => {
     await expect(disconnectControlPairing()).rejects.toThrow('secure store locked');
     expect(clear).not.toHaveBeenCalled();
     expect(cancelPending).not.toHaveBeenCalled();
+    expect(clearReplay).not.toHaveBeenCalled();
   });
 
   it('clears orphaned grant metadata when no grant is present', async () => {
@@ -57,6 +63,11 @@ describe('device control lifecycle', () => {
     cancelPending.mockRejectedValueOnce(new Error('secure storage locked'));
     await expect(disconnectControlPairing()).rejects.toThrow('secure storage locked');
     expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed if replay history cannot be cleared', async () => {
+    clearReplay.mockRejectedValueOnce(new Error('storage locked'));
+    await expect(disconnectControlPairing()).rejects.toThrow('storage locked');
   });
 
   it('reports cryptographic capability as a boolean without exporting keys', async () => {
