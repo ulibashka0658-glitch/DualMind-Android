@@ -1,3 +1,4 @@
+jest.mock('../../lib/control-hmac', () => ({ removeControlHmacKey: jest.fn() }));
 jest.mock('../../lib/control-pending-pairing', () => ({
   consumePendingPairingProof: jest.fn(),
 }));
@@ -10,11 +11,13 @@ jest.mock('../../lib/control-secure-store', () => ({
   saveControlGrant: jest.fn(),
 }));
 
+import { removeControlHmacKey } from '../../lib/control-hmac';
 import { consumePendingPairingProof } from '../../lib/control-pending-pairing';
 import { loadControlGrant, saveControlGrant } from '../../lib/control-secure-store';
 import { finalizeVerifiedPairing } from '../../lib/control-pairing-finalize';
 import { loadBoundPairingConsent, clearBoundPairingConsent } from '../../lib/control-pairing-consent-store';
 
+const removeKey = removeControlHmacKey as jest.Mock;
 const bound = loadBoundPairingConsent as jest.Mock;
 const clear = clearBoundPairingConsent as jest.Mock;
 const proof = consumePendingPairingProof as jest.Mock;
@@ -33,6 +36,7 @@ describe('verified pairing finalization', () => {
     clear.mockResolvedValue(undefined);
     load.mockResolvedValue(null);
     save.mockResolvedValue(undefined);
+    removeKey.mockResolvedValue(undefined);
   });
   it('persists only approved scopes after successful proof', async () => {
     expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now)).toEqual({ ok: true, reason: 'paired' });
@@ -68,6 +72,20 @@ describe('verified pairing finalization', () => {
   it('fails closed if secure storage fails', async () => {
     save.mockRejectedValueOnce(new Error('locked'));
     expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
-      .toEqual({ ok: false, reason: 'secure-storage-unavailable' });
+      .toEqual({ ok: false, reason: 'grant-save-failed-key-removed' });
+    expect(removeKey).toHaveBeenCalledWith(id);
+  });
+  it('reports orphaned key cleanup failure explicitly', async () => {
+    save.mockRejectedValueOnce(new Error('locked'));
+    removeKey.mockRejectedValueOnce(new Error('locked'));
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: false, reason: 'orphaned-key-cleanup-failed' });
+  });
+  it('never removes key when proof fails or grant already exists', async () => {
+    proof.mockResolvedValueOnce(false);
+    await finalizeVerifiedPairing(consent, challenge, 'signature', now);
+    load.mockResolvedValueOnce({ pairingId: 'old' });
+    await finalizeVerifiedPairing(consent, challenge, 'signature', now);
+    expect(removeKey).not.toHaveBeenCalled();
   });
 });
