@@ -43,7 +43,16 @@ export function prepareLocalPairingApproval(
   });
 }
 
-export async function cancelLocalPairingApproval(): Promise<void> {
-  // Called from disconnect while holding the lifecycle lock; do not nest it.
+/** Internal cleanup while the caller already owns the pairing lifecycle lock. */
+export async function clearLocalPairingApprovalRecords(): Promise<void> {
   await Promise.all([cancelPendingPairingChallenge(), clearBoundPairingConsent()]);
+}
+
+/** Cancel pending approval, revoking its secret before deleting its identity. */
+export function cancelLocalPairingApproval(): Promise<void> {
+  return runPairingMutation(async () => {
+    const pendingId = await getStoredPendingPairingId();
+    if (pendingId) await removeControlHmacKey(pendingId);
+    await clearLocalPairingApprovalRecords();
+  });
 }
