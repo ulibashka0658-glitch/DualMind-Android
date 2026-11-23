@@ -15,12 +15,17 @@ export default function ControlSecurityPanel() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
+    setStatus(null);
+    setRecovery(null);
     try {
       const [connection, restartState] = await Promise.all([
         getControlConnectionStatus(), inspectPairingRecoveryState(),
       ]);
       setStatus(connection);
       setRecovery(restartState);
+      if (restartState.state === 'storage-unavailable') {
+        setError('Хранилище безопасности недоступно. Не создавайте новую привязку до восстановления доступа.');
+      }
     } catch {
       setError('Не удалось прочитать состояние безопасности.');
       setStatus(null);
@@ -80,11 +85,12 @@ export default function ControlSecurityPanel() {
           <Text style={styles.text}>Криптография: {status.cryptoAvailable ? 'доступна' : 'недоступна'} ({status.cryptoReason})</Text>
           <Text style={styles.text}>Срок доступа: {status.expiresAt ?? 'не задан'}</Text>
           <Text style={styles.text}>Разрешения: {status.scopes.length ? status.scopes.join(', ') : 'нет'}</Text>
-          {(status.paired || recovery?.state === 'pending' || recovery?.state === 'cleanup-required') && <Pressable accessibilityRole="button" disabled={loading} onPress={disconnect}>
+          {(status.paired || recovery?.state === 'pending' || recovery?.state === 'cleanup-required') && recovery?.state !== 'storage-unavailable' && <Pressable accessibilityRole="button" disabled={loading} onPress={disconnect}>
             <Text style={styles.danger}>Отключить привязку и удалить ключ</Text>
           </Pressable>}
         </>}
-        <ControlPairingPreview />
+        {recovery?.state !== 'storage-unavailable' && recovery?.state !== 'cleanup-required' && !error && <ControlPairingPreview />}
+        {recovery?.state === 'storage-unavailable' && <Text style={styles.error}>Проверьте доступность защищённого хранилища и повторите проверку. Автоматическое удаление отключено.</Text>}
         <Pressable accessibilityRole="button" disabled={loading} onPress={() => void refresh()}>
           <Text style={styles.action}>Обновить состояние</Text>
         </Pressable>
