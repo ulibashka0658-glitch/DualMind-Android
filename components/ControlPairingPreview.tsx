@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { ControlScope } from '@/lib/control-policy';
 import { prepareLocalPairingApproval, cancelLocalPairingApproval } from '@/lib/control-pairing-local-approval';
 import { parsePairingRequest } from '@/lib/control-pairing-preview';
+import { getLocalPairingApprovalStatus } from '@/lib/control-pairing-recovery';
 
 const labels: Record<string, string> = {
   'status:read': 'Состояние приложения',
@@ -24,6 +25,16 @@ export default function ControlPairingPreview() {
   const [consented, setConsented] = useState(false);
   const [busy, setBusy] = useState(false);
   const [challengeExpires, setChallengeExpires] = useState('');
+  useEffect(() => {
+    if (!expanded) return;
+    let alive = true;
+    void getLocalPairingApprovalStatus().then(saved => {
+      if (!alive) return;
+      setConsented(!!saved);
+      setChallengeExpires(saved ? new Date(saved.challenge.expiresAt).toISOString() : '');
+    });
+    return () => { alive = false; };
+  }, [expanded]);
   const inspect = () => {
     const parsed = parsePairingRequest(input, Date.now());
     setPreview(parsed);
@@ -53,6 +64,24 @@ export default function ControlPairingPreview() {
           <Text style={styles.action}>Проверить запрос</Text>
         </Pressable>
         {!!error && <Text style={styles.error}>{error}</Text>}
+        {consented && <>
+            <Text style={styles.warning}>На устройстве есть ожидающее согласие до {challengeExpires}. Удалённый доступ не включён.</Text>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={async () => {
+              setBusy(true);
+              try {
+                await cancelLocalPairingApproval();
+                setConsented(false);
+                setChallengeExpires('');
+              } catch {
+                setError('Не удалось отменить запрос в защищённом хранилище.');
+              } finally {
+                setBusy(false);
+              }
+            }}>
+              <Text style={styles.action}>Отменить локальное согласие</Text>
+            </Pressable>
+        </>
+
         {preview && <>
           <Text style={styles.note}>Идентификатор: {preview.pairingId}</Text>
           <Text style={styles.note}>Действует до: {preview.expiresAt}</Text>
@@ -77,23 +106,6 @@ export default function ControlPairingPreview() {
           }}>
             <Text style={styles.action}>{busy ? 'Сохранение...' : 'Подтвердить и сохранить разрешения на устройстве'}</Text>
           </Pressable>
-          {consented && <>
-            <Text style={styles.warning}>Согласие сохранено в защищённом хранилище до {challengeExpires}. Удалённый доступ не включён.</Text>
-            <Pressable accessibilityRole="button" disabled={busy} onPress={async () => {
-              setBusy(true);
-              try {
-                await cancelLocalPairingApproval();
-                setConsented(false);
-                setChallengeExpires('');
-              } catch {
-                setError('Не удалось отменить запрос в защищённом хранилище.');
-              } finally {
-                setBusy(false);
-              }
-            }}>
-              <Text style={styles.action}>Отменить локальное согласие</Text>
-            </Pressable>
-          </>}
           <Text style={styles.warning}>Подключение не активировано. Для подтверждения необходим защищённый обмен ключами.</Text>
         </>}
       </View>}
