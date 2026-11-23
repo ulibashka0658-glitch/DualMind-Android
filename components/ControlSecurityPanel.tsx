@@ -83,7 +83,7 @@ export default function ControlSecurityPanel() {
         </Text>}
         {status && <>
           <Text style={styles.text}>Привязка: {status.paired ? 'есть' : 'нет'}</Text>
-          <Text style={styles.text}>Локальное разрешение: {status.active ? 'действует' : 'неактивно'}</Text>
+          <Text style={styles.text}>Локальное разрешение: {recovery?.state === 'cleanup-required' ? 'заблокировано до очистки' : status.active && recovery?.state === 'paired' ? 'действует локально' : 'неактивно'}</Text>
           <Text style={styles.text}>Криптография: {status.cryptoAvailable ? 'доступна' : 'недоступна'} ({status.cryptoReason})</Text>
           <Text style={styles.text}>Срок доступа: {status.expiresAt ?? 'не задан'}</Text>
           <Text style={styles.text}>Разрешения: {status.scopes.length ? status.scopes.join(', ') : 'нет'}</Text>
