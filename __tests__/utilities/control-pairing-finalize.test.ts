@@ -39,14 +39,14 @@ describe('verified pairing finalization', () => {
     bound.mockResolvedValue(consent);
     clear.mockResolvedValue(undefined);
     load.mockResolvedValue(null);
-    save.mockResolvedValue(undefined);
+    save.mockImplementation(async (grant: unknown) => { load.mockResolvedValue(grant); });
     removeKey.mockResolvedValue(undefined);
   });
   it('holds the shared lifecycle lock until the grant is persisted', async () => {
     let release!: () => void;
     const events: string[] = [];
     save.mockImplementationOnce(() => new Promise<void>(resolve => {
-      release = () => { events.push('grant-saved'); resolve(); };
+      release = () => { events.push('grant-saved'); load.mockResolvedValue({ pairingId: id, scopes: ['status:read'], expiresAt: consent.expiresAt, revoked: false }); resolve(); };
     }));
     const finalizing = finalizeVerifiedPairing(consent, challenge, 'signature', now);
     for (let i = 0; i < 30 && !release; i++) await Promise.resolve();
@@ -68,7 +68,7 @@ describe('verified pairing finalization', () => {
   });
   it('persists grant, clears consent, then deletes challenge in order', async () => {
     const events: string[] = [];
-    save.mockImplementationOnce(async () => { events.push('grant'); });
+    save.mockImplementationOnce(async (grant: unknown) => { events.push('grant'); load.mockResolvedValue(grant); });
     clear.mockImplementationOnce(async () => { events.push('consent'); });
     cancelChallenge.mockImplementationOnce(async () => { events.push('challenge'); });
     expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
