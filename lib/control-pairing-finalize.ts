@@ -47,6 +47,13 @@ export function finalizeVerifiedPairing(
       };
       try {
         await saveControlGrant(grant);
+        // Confirm the exact persisted authorization before clearing proof data.
+        const readback = await loadControlGrant();
+        if (!readback || readback.pairingId !== grant.pairingId ||
+            readback.expiresAt !== grant.expiresAt || readback.revoked !== grant.revoked ||
+            JSON.stringify(readback.scopes) !== JSON.stringify(grant.scopes)) {
+          return { ok: false, reason: 'grant-write-uncertain' };
+        }
       } catch {
         // A rejected SecureStore write may have committed before reporting an
         // error. Never destroy a key while the grant's persistence is unknown.
