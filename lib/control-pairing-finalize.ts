@@ -21,7 +21,7 @@ export function finalizeVerifiedPairing(
     if (!consent || !challenge || consent.pairingId !== challenge.pairingId ||
         !Number.isSafeInteger(now) || !Array.isArray(consent.approvedScopes) ||
         !consent.approvedScopes.length || typeof consent.expiresAt !== 'string' ||
-        Date.parse(consent.expiresAt) <= now ||
+        (!Number.isFinite(Date.parse(consent.expiresAt)) || Date.parse(consent.expiresAt) <= now) ||
         consent.approvedScopes.some(scope => ![
           'status:read', 'models:read', 'downloads:read', 'diagnostics:read',
         ].includes(scope))) {
