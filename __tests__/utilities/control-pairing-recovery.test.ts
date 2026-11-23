@@ -8,7 +8,7 @@ jest.mock('../../lib/control-pairing-consent-store', () => ({
 import * as SecureStore from 'expo-secure-store';
 import { Buffer } from 'buffer';
 import { loadBoundPairingConsent } from '../../lib/control-pairing-consent-store';
-import { getLocalPairingApprovalStatus } from '../../lib/control-pairing-recovery';
+import { getLocalPairingApprovalStatus, getStoredPendingPairingId } from '../../lib/control-pairing-recovery';
 
 const now = 1795435200000;
 const challenge = {
@@ -31,6 +31,16 @@ describe('local pairing recovery', () => {
     jest.clearAllMocks();
     get.mockResolvedValue(JSON.stringify(challenge));
     bound.mockResolvedValue(consent);
+  });
+  it('recovers identity from expired challenge without accepting it as consent', async () => {
+    expect(await getLocalPairingApprovalStatus(now + 60000)).toBeNull();
+    expect(await getStoredPendingPairingId()).toBe(challenge.pairingId);
+  });
+  it('rejects malformed pending identity and propagates storage errors', async () => {
+    get.mockResolvedValueOnce(JSON.stringify({ pairingId: '../invalid' }));
+    await expect(getStoredPendingPairingId()).rejects.toThrow('Invalid pending pairing identity');
+    get.mockRejectedValueOnce(new Error('locked'));
+    await expect(getStoredPendingPairingId()).rejects.toThrow('locked');
   });
   it('restores only matching live challenge and consent', async () => {
     expect(await getLocalPairingApprovalStatus(now)).toEqual({ challenge, consent });
