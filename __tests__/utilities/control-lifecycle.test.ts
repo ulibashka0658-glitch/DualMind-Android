@@ -1,3 +1,4 @@
+jest.mock('../../lib/control-pairing-recovery', () => ({ getLocalPairingApprovalStatus: jest.fn() }));
 jest.mock('../../lib/control-replay-store', () => ({ clearControlReplayHistory: jest.fn() }));
 jest.mock('../../lib/control-pairing-local-approval', () => ({
   cancelLocalPairingApproval: jest.fn(),
@@ -8,12 +9,14 @@ jest.mock('../../lib/control-secure-store', () => ({
   clearControlGrant: jest.fn(),
 }));
 
+import { getLocalPairingApprovalStatus } from '../../lib/control-pairing-recovery';
 import { clearControlReplayHistory } from '../../lib/control-replay-store';
 import { cancelLocalPairingApproval } from '../../lib/control-pairing-local-approval';
 import { removeControlHmacKey } from '../../lib/control-hmac';
 import { clearControlGrant, loadControlGrant } from '../../lib/control-secure-store';
 import { disconnectControlPairing, inspectControlCrypto } from '../../lib/control-lifecycle';
 
+const pendingStatus = getLocalPairingApprovalStatus as jest.Mock;
 const clearReplay = clearControlReplayHistory as jest.Mock;
 const cancelPending = cancelLocalPairingApproval as jest.Mock;
 const load = loadControlGrant as jest.Mock;
@@ -31,6 +34,7 @@ describe('device control lifecycle', () => {
     clear.mockResolvedValue(undefined);
     cancelPending.mockResolvedValue(undefined);
     clearReplay.mockResolvedValue(undefined);
+    pendingStatus.mockResolvedValue(null);
   });
 
   it('destroys cryptographic key before deleting the grant', async () => {
@@ -57,6 +61,28 @@ describe('device control lifecycle', () => {
     expect(remove).not.toHaveBeenCalled();
     expect(clear).toHaveBeenCalledTimes(1);
     expect(cancelPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes orphaned key for pending approval even without a grant', async () => {
+    load.mockResolvedValueOnce(null);
+    pendingStatus.mockResolvedValueOnce({ consent: { pairingId: 'pending-2' } });
+    await disconnectControlPairing();
+    expect(remove).toHaveBeenCalledWith('pending-2');
+    expect(cancelPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not delete the same key twice if grant and pending match', async () => {
+    pendingStatus.mockResolvedValueOnce({ consent: { pairingId: 'pair-1' } });
+    await disconnectControlPairing();
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear a pending approval if its key cannot be deleted', async () => {
+    load.mockResolvedValueOnce(null);
+    pendingStatus.mockResolvedValueOnce({ consent: { pairingId: 'pending-2' } });
+    remove.mockRejectedValueOnce(new Error('key deletion failed'));
+    await expect(disconnectControlPairing()).rejects.toThrow('key deletion failed');
+    expect(cancelPending).not.toHaveBeenCalled();
   });
 
   it('surfaces pending approval cleanup failure instead of reporting success', async () => {
