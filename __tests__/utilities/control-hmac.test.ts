@@ -12,7 +12,10 @@ const key = Buffer.alloc(32, 7).toString('base64');
 const signature = Buffer.alloc(32, 9).toString('base64');
 
 describe('device-bound HMAC verification', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+  });
 
   it('rejects missing and invalid pairing identities', async () => {
     expect(await verifyControlHmac('message', signature, '../other')).toBe(false);
@@ -32,6 +35,18 @@ describe('device-bound HMAC verification', () => {
     );
     await removeControlHmacKey('pair-1');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('dualmind-control-hmac-v1-pair-1');
+  });
+
+  it('refuses to overwrite an existing key for the same pairing', async () => {
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(key);
+    await expect(provisionControlHmacKey('pair-1', signature)).rejects.toThrow('Pairing key already exists');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('fails closed if checking for an existing key fails', async () => {
+    (SecureStore.getItemAsync as jest.Mock).mockRejectedValueOnce(new Error('locked'));
+    await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('locked');
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
   });
 
   it('rejects when platform cryptography or secure storage is unavailable', async () => {
