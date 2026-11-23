@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import type { VerifyControlSignature } from './control-signed-request';
 import { getLocalPairingApprovalStatus } from './control-pairing-recovery';
 import { loadControlGrant } from './control-secure-store';
+import { runPairingMutation } from './control-pairing-mutex';
 
 const KEY_PREFIX = 'dualmind-control-hmac-v1-';
 let provisionQueue: Promise<unknown> = Promise.resolve();
@@ -43,7 +44,8 @@ export async function provisionControlHmacKey(pairingId: string, base64Secret: s
     throw new Error('Invalid pairing key');
   }
   // Serialize local provisioning so two callers cannot both observe an empty slot.
-  const task = provisionQueue.catch(() => undefined).then(async () => {
+  return runPairingMutation(async () => {
+    const task = provisionQueue.catch(() => undefined).then(async () => {
     // A secret may be provisioned only for an active, locally approved request.
     const pending = await getLocalPairingApprovalStatus();
     if (!pending || pending.consent.pairingId !== pairingId) {
@@ -58,8 +60,9 @@ export async function provisionControlHmacKey(pairingId: string, base64Secret: s
       keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
   });
-  provisionQueue = task;
-  await task;
+    provisionQueue = task;
+    await task;
+  });
 }
 
 export async function removeControlHmacKey(pairingId: string): Promise<void> {
