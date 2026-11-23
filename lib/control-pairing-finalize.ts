@@ -3,6 +3,7 @@ import type { PairingConsent } from './control-pairing-consent';
 import type { PairingChallenge } from './control-pairing-proof';
 import { consumePendingPairingProof } from './control-pending-pairing';
 import { loadControlGrant, saveControlGrant } from './control-secure-store';
+import { loadBoundPairingConsent, clearBoundPairingConsent } from './control-pairing-consent-store';
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -28,6 +29,10 @@ export function finalizeVerifiedPairing(
       return { ok: false, reason: 'invalid-consent' };
     }
     try {
+      const approved = await loadBoundPairingConsent(challenge, now);
+      if (!approved || JSON.stringify(approved) !== JSON.stringify(consent)) {
+        return { ok: false, reason: 'consent-not-bound' };
+      }
       const existing = await loadControlGrant();
       if (existing) return { ok: false, reason: 'existing-pairing' };
       if (!await consumePendingPairingProof(challenge, signature, now)) {
@@ -40,6 +45,13 @@ export function finalizeVerifiedPairing(
         revoked: false,
       };
       await saveControlGrant(grant);
+      try {
+        await clearBoundPairingConsent();
+      } catch {
+        // Access has been saved, so report failure rather than silently
+        // claiming that cleanup completed. A retry will reject existing grant.
+        return { ok: false, reason: 'consent-cleanup-failed' };
+      }
       return { ok: true, reason: 'paired' };
     } catch {
       return { ok: false, reason: 'secure-storage-unavailable' };
