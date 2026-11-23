@@ -123,6 +123,23 @@ describe('verified pairing finalization', () => {
       .toEqual({ ok: false, reason: 'grant-save-failed-key-removed' });
     expect(removeKey).toHaveBeenCalledWith(id);
   });
+  it('preserves key when a rejected write actually persisted the grant', async () => {
+    save.mockRejectedValueOnce(new Error('write interrupted'));
+    load.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      pairingId: id, scopes: ['status:read'], expiresAt: consent.expiresAt, revoked: false,
+    });
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: false, reason: 'grant-write-uncertain' });
+    expect(removeKey).not.toHaveBeenCalled();
+    expect(cancelChallenge).not.toHaveBeenCalled();
+  });
+  it('preserves key when readback fails after rejected write', async () => {
+    save.mockRejectedValueOnce(new Error('write interrupted'));
+    load.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('storage locked'));
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: false, reason: 'grant-write-uncertain' });
+    expect(removeKey).not.toHaveBeenCalled();
+  });
   it('reports orphaned key cleanup failure explicitly', async () => {
     save.mockRejectedValueOnce(new Error('locked'));
     removeKey.mockRejectedValueOnce(new Error('locked'));
