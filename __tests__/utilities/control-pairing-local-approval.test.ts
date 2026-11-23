@@ -98,6 +98,22 @@ describe('local pairing approval', () => {
     await expect(prepareLocalPairingApproval(request, ['status:read'], now)).rejects.toThrow();
     expect(create).not.toHaveBeenCalled();
   });
+  it('removes the pending secret before cancelling approval records', async () => {
+    const events: string[] = [];
+    pendingId.mockResolvedValueOnce('old-pairing-id-12345');
+    removeKey.mockImplementationOnce(async () => { events.push('key'); });
+    cancel.mockImplementationOnce(async () => { events.push('challenge'); });
+    await cancelLocalPairingApproval();
+    expect(events).toEqual(['key', 'challenge']);
+    expect(removeKey).toHaveBeenCalledWith('old-pairing-id-12345');
+  });
+  it('retains pending records if secret deletion fails', async () => {
+    pendingId.mockResolvedValueOnce('old-pairing-id-12345');
+    removeKey.mockRejectedValueOnce(new Error('locked'));
+    await expect(cancelLocalPairingApproval()).rejects.toThrow('locked');
+    expect(cancel).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+  });
   it('cancels both pending records', async () => {
     await cancelLocalPairingApproval();
     expect(cancel).toHaveBeenCalledTimes(1);
