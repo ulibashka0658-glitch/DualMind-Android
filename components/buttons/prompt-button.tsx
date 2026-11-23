@@ -1,4 +1,6 @@
 import type { TokenUsage } from "@/lib/token-usage";
+import { readUsageRates } from "@/lib/usage-rates";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialIconButton } from "@/components/buttons/icon-button";
 import { useChat, useLLM, useSystem } from "@/context";
 import getMetadata from "@/utilities/metadata";
@@ -99,16 +101,22 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
           updateTime: new Date().toISOString(),
         }))
       );
-    }, (usage: TokenUsage) => {
-      // Persist provider usage on this exact assistant response. Never guess
-      // missing counts or silently assign cloud pricing.
+    }, async (usage: TokenUsage) => {
+      // Snapshot the manual rates when usage arrives, not at render time.
+      let rates = readUsageRates(null);
+      try {
+        const saved = await AsyncStorage.getItem("dual-mind-usage-rates-v1");
+        if (saved) rates = readUsageRates(JSON.parse(saved));
+      } catch (error) {
+        console.warn("Unable to read token pricing:", error);
+      }
       setMappings(prev => updateContent(prev, responseId, content => content, meta => ({
         ...meta,
         tokenUsage: {
           usage,
           mode: ["Llama", "Ollama", "llmman"].includes(LLM.type) ? "local" : "cloud",
-          pricing: null,
-          fx: null,
+          pricing: rates.pricing,
+          fx: rates.fx,
         },
       })));
     });
