@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { ControlScope } from '@/lib/control-policy';
+import { preparePairingConsent } from '@/lib/control-pairing-consent';
 import { parsePairingRequest } from '@/lib/control-pairing-preview';
 
 const labels: Record<string, string> = {
@@ -18,9 +20,13 @@ export default function ControlPairingPreview() {
   const [input, setInput] = useState('');
   const [preview, setPreview] = useState<ReturnType<typeof parsePairingRequest>>(null);
   const [error, setError] = useState('');
+  const [selected, setSelected] = useState<ControlScope[]>([]);
+  const [consented, setConsented] = useState(false);
   const inspect = () => {
     const parsed = parsePairingRequest(input, Date.now());
     setPreview(parsed);
+    setSelected([]);
+    setConsented(false);
     setError(parsed ? '' : 'Неверный, просроченный или небезопасный запрос привязки.');
   };
   return (
@@ -34,7 +40,7 @@ export default function ControlPairingPreview() {
           accessibilityLabel="JSON запроса привязки"
           style={styles.input}
           value={input}
-          onChangeText={value => { setInput(value); setPreview(null); setError(''); }}
+          onChangeText={value => { setInput(value); setPreview(null); setSelected([]); setConsented(false); setError(''); }}
           multiline
           maxLength={4096}
           placeholder="JSON запроса привязки"
@@ -49,7 +55,18 @@ export default function ControlPairingPreview() {
           <Text style={styles.note}>Действует до: {preview.expiresAt}</Text>
           <Text style={styles.note}>Запрошенные разрешения:</Text>
           {preview.requestedScopes.map(scope =>
-            <Text key={scope} style={styles.note}>• {labels[scope] ?? scope}</Text>)}
+            <Pressable key={scope} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(scope) }} onPress={() => { setConsented(false); setSelected(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]); }}>
+              <Text style={styles.note}>{selected.includes(scope) ? '☑' : '☐'} {labels[scope] ?? scope}</Text>
+            </Pressable>)}
+          <Pressable accessibilityRole="button" onPress={() => {
+            const consent = preparePairingConsent(preview, selected, new Date().toISOString());
+            setConsented(!!consent);
+            if (!consent) setError('Выберите хотя бы одно разрешение и проверьте срок запроса.');
+            else setError('');
+          }}>
+            <Text style={styles.action}>Подтвердить выбранные разрешения локально</Text>
+          </Pressable>
+          {consented && <Text style={styles.warning}>Согласие подготовлено только на этом экране. Доступ не выдан: проверка владения ключом и безопасный обмен ещё не завершены.</Text>}
           <Text style={styles.warning}>Подключение не активировано. Для подтверждения необходим защищённый обмен ключами.</Text>
         </>}
       </View>}
