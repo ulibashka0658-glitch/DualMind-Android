@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { disconnectControlPairing } from '@/lib/control-lifecycle';
 import { getControlConnectionStatus, type ControlConnectionStatus } from '@/lib/control-status';
+import ControlPairingPreview from '@/components/ControlPairingPreview';
 
 export default function ControlSecurityPanel() {
   const [open, setOpen] = useState(false);
@@ -67,6 +68,7 @@ export default function ControlSecurityPanel() {
             <Text style={styles.danger}>Отключить привязку и удалить ключ</Text>
           </Pressable>}
         </>}
+        <ControlPairingPreview />
         <Pressable accessibilityRole="button" disabled={loading} onPress={() => void refresh()}>
           <Text style={styles.action}>Обновить состояние</Text>
         </Pressable>
