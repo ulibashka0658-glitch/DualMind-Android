@@ -39,8 +39,6 @@ export default function ControlPairingPreview() {
     const parsed = parsePairingRequest(input, Date.now());
     setPreview(parsed);
     setSelected([]);
-    setConsented(false);
-    setChallengeExpires('');
     setError(parsed ? '' : 'Неверный, просроченный или небезопасный запрос привязки.');
   };
   return (
@@ -54,7 +52,7 @@ export default function ControlPairingPreview() {
           accessibilityLabel="JSON запроса привязки"
           style={styles.input}
           value={input}
-          onChangeText={value => { setInput(value); setPreview(null); setSelected([]); setConsented(false); setChallengeExpires(''); setError(''); }}
+          onChangeText={value => { setInput(value); setPreview(null); setSelected([]); setError(''); }}
           multiline
           maxLength={4096}
           placeholder="JSON запроса привязки"
@@ -87,12 +85,11 @@ export default function ControlPairingPreview() {
           <Text style={styles.note}>Действует до: {preview.expiresAt}</Text>
           <Text style={styles.note}>Запрошенные разрешения:</Text>
           {preview.requestedScopes.map(scope =>
-            <Pressable key={scope} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(scope) }} onPress={() => { setConsented(false); setChallengeExpires(''); setSelected(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]); }}>
+            <Pressable key={scope} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(scope) }} onPress={() => { setSelected(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]); }}>
               <Text style={styles.note}>{selected.includes(scope) ? '☑' : '☐'} {labels[scope] ?? scope}</Text>
             </Pressable>)}
           <Pressable accessibilityRole="button" disabled={busy} onPress={async () => {
             setBusy(true);
-            setConsented(false);
             setError('');
             try {
               const challenge = await prepareLocalPairingApproval(preview, selected);
