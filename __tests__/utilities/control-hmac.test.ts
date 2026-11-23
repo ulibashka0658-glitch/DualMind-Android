@@ -45,6 +45,22 @@ describe('device-bound HMAC verification', () => {
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('dualmind-control-hmac-v1-pair-1');
   });
 
+  it('serializes key deletion after an in-flight provision', async () => {
+    let release!: () => void;
+    (SecureStore.setItemAsync as jest.Mock).mockImplementationOnce(() =>
+      new Promise<void>(resolve => { release = resolve; }),
+    );
+    const provisioning = provisionControlHmacKey('pair-1', key);
+    // Wait for queued provisioning to enter the secure-store write.
+    for (let i = 0; i < 10 && !release; i++) await Promise.resolve();
+    expect(release).toBeDefined();
+    const deletion = removeControlHmacKey('pair-1');
+    expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
+    release();
+    await Promise.all([provisioning, deletion]);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('dualmind-control-hmac-v1-pair-1');
+  });
+
   it('rejects provisioning without a live locally approved pairing', async () => {
     (getLocalPairingApprovalStatus as jest.Mock).mockResolvedValueOnce(null);
     await expect(provisionControlHmacKey('pair-1', key)).rejects.toThrow('Local pairing approval required');
