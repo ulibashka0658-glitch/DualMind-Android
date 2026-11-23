@@ -3,6 +3,7 @@ import type { PairingRequest } from './control-pairing';
 import type { PairingChallenge } from './control-pairing-proof';
 import { preparePairingConsent } from './control-pairing-consent';
 import { loadControlGrant } from './control-secure-store';
+import { runPairingMutation } from './control-pairing-mutex';
 import { createPendingPairingChallenge, cancelPendingPairingChallenge } from './control-pending-pairing';
 import { storeLocalPairingConsent, clearBoundPairingConsent } from './control-pairing-consent-store';
 
@@ -11,11 +12,12 @@ import { storeLocalPairingConsent, clearBoundPairingConsent } from './control-pa
  * Store the exact selected scopes bound to a fresh device-generated challenge.
  * No remote connection or access grant is created.
  */
-export async function prepareLocalPairingApproval(
+export function prepareLocalPairingApproval(
   request: PairingRequest,
   selectedScopes: readonly ControlScope[],
   now = Date.now(),
 ): Promise<PairingChallenge> {
+  return runPairingMutation(async () => {
   if (!Number.isSafeInteger(now)) throw new Error('Invalid approval time');
   const consent = preparePairingConsent(request, selectedScopes, new Date(now).toISOString());
   if (!consent) throw new Error('Invalid or expired pairing consent');
@@ -33,8 +35,10 @@ export async function prepareLocalPairingApproval(
     await Promise.all([cancelPendingPairingChallenge(), clearBoundPairingConsent()]);
     throw error;
   }
+  });
 }
 
 export async function cancelLocalPairingApproval(): Promise<void> {
+  // Called from disconnect while holding the lifecycle lock; do not nest it.
   await Promise.all([cancelPendingPairingChallenge(), clearBoundPairingConsent()]);
 }
