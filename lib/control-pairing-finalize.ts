@@ -3,10 +3,10 @@ import type { PairingConsent } from './control-pairing-consent';
 import type { PairingChallenge } from './control-pairing-proof';
 import { consumePendingPairingProof } from './control-pending-pairing';
 import { removeControlHmacKey } from './control-hmac';
+import { runPairingMutation } from './control-pairing-mutex';
 import { loadControlGrant, saveControlGrant } from './control-secure-store';
 import { loadBoundPairingConsent, clearBoundPairingConsent } from './control-pairing-consent-store';
 
-let queue: Promise<unknown> = Promise.resolve();
 
 /**
  * Finalize ONLY after a trusted, out-of-band authenticated key exchange
@@ -19,7 +19,7 @@ export function finalizeVerifiedPairing(
   signature: string,
   now = Date.now(),
 ): Promise<{ ok: boolean; reason: string }> {
-  const task = queue.catch(() => undefined).then(async () => {
+  return runPairingMutation(async () => {
     if (!consent || !challenge || consent.pairingId !== challenge.pairingId ||
         !Number.isSafeInteger(now) || !Array.isArray(consent.approvedScopes) ||
         !consent.approvedScopes.length || typeof consent.expiresAt !== 'string' ||
@@ -69,6 +69,4 @@ export function finalizeVerifiedPairing(
       return { ok: false, reason: 'secure-storage-unavailable' };
     }
   });
-  queue = task;
-  return task;
 }
