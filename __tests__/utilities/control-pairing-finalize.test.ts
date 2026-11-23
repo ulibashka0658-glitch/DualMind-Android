@@ -66,6 +66,22 @@ describe('verified pairing finalization', () => {
       pairingId: id, scopes: ['status:read'], expiresAt: consent.expiresAt, revoked: false,
     });
   });
+  it('persists grant, clears consent, then deletes challenge in order', async () => {
+    const events: string[] = [];
+    save.mockImplementationOnce(async () => { events.push('grant'); });
+    clear.mockImplementationOnce(async () => { events.push('consent'); });
+    cancelChallenge.mockImplementationOnce(async () => { events.push('challenge'); });
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: true, reason: 'paired' });
+    expect(events).toEqual(['grant', 'consent', 'challenge']);
+  });
+  it('keeps challenge identity if consent cleanup fails after grant save', async () => {
+    clear.mockRejectedValueOnce(new Error('locked'));
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: false, reason: 'pairing-cleanup-failed' });
+    expect(cancelChallenge).not.toHaveBeenCalled();
+    expect(removeKey).not.toHaveBeenCalled();
+  });
   it('does not remove challenge when grant persistence fails', async () => {
     save.mockRejectedValueOnce(new Error('locked'));
     await finalizeVerifiedPairing(consent, challenge, 'signature', now);
