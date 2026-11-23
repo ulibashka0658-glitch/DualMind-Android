@@ -36,11 +36,9 @@ export function prepareLocalPairingApproval(
     await storeLocalPairingConsent(consent, challenge, now);
     return challenge;
   } catch (error) {
-    // Invalidate both records on any partial write; propagate cleanup failure.
-    // Keep the challenge (and its pairing ID) until consent deletion succeeds.
-  // A crash between writes must still leave the key discoverable for cleanup.
-  await clearBoundPairingConsent();
-  await cancelPendingPairingChallenge();
+    // Keep the challenge identity until consent deletion succeeds.
+    await clearBoundPairingConsent();
+    await cancelPendingPairingChallenge();
     throw error;
   }
   });
@@ -48,7 +46,9 @@ export function prepareLocalPairingApproval(
 
 /** Internal cleanup while the caller already owns the pairing lifecycle lock. */
 export async function clearLocalPairingApprovalRecords(): Promise<void> {
-  await Promise.all([cancelPendingPairingChallenge(), clearBoundPairingConsent()]);
+  // Preserve the pending identity if consent deletion fails.
+  await clearBoundPairingConsent();
+  await cancelPendingPairingChallenge();
 }
 
 /** Cancel pending approval, revoking its secret before deleting its identity. */
