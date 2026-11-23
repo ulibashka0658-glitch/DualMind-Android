@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { Buffer } from 'buffer';
+import * as Crypto from 'expo-crypto';
 import type { VerifyControlSignature } from './control-signed-request';
 
 const KEY_PREFIX = 'dualmind-control-hmac-v1-';
@@ -54,4 +55,15 @@ export async function provisionControlHmacKey(pairingId: string, base64Secret: s
 export async function removeControlHmacKey(pairingId: string): Promise<void> {
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(pairingId)) throw new Error('Invalid pairing ID');
   await SecureStore.deleteItemAsync(KEY_PREFIX + pairingId);
+}
+
+/**
+ * Generate a fresh 256-bit secret on the device. This does NOT transfer the
+ * secret to another device or establish a trusted channel by itself.
+ * The caller must use a separate authenticated pairing ceremony.
+ */
+export async function generateDevicePairingSecret(): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(32);
+  if (bytes.length !== 32) throw new Error('Invalid secure random output');
+  return Buffer.from(bytes).toString('base64');
 }
