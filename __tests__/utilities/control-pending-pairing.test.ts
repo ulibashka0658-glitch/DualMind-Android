@@ -44,6 +44,21 @@ describe('single-use pairing challenge', () => {
     expect(await consumePendingPairingProof(challenge, 'signature', now)).toBe(false);
     expect(del).toHaveBeenCalledTimes(1);
   });
+  it('retains the challenge during finalization until grant persistence', async () => {
+    const challenge = await createPendingPairingChallenge(id, now);
+    expect(await consumePendingPairingProof(challenge, 'signature', now, true)).toBe(true);
+    expect(stored).toBe(JSON.stringify(challenge));
+    expect(del).not.toHaveBeenCalled();
+    await cancelPendingPairingChallenge();
+    expect(stored).toBeNull();
+  });
+  it('rejects invalid proof without deleting retained challenge', async () => {
+    const challenge = await createPendingPairingChallenge(id, now);
+    verify.mockResolvedValueOnce(false);
+    expect(await consumePendingPairingProof(challenge, 'signature', now, true)).toBe(false);
+    expect(stored).toBe(JSON.stringify(challenge));
+    expect(del).not.toHaveBeenCalled();
+  });
   it('rejects modified and expired challenges without verifying', async () => {
     const challenge = await createPendingPairingChallenge(id, now);
     expect(await consumePendingPairingProof({ ...challenge, nonce: 'tampered' }, 'signature', now)).toBe(false);
