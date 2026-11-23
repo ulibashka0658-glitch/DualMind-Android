@@ -2,6 +2,7 @@ import { removeControlHmacKey } from './control-hmac';
 import { clearControlGrant, loadControlGrant } from './control-secure-store';
 import { cancelLocalPairingApproval } from './control-pairing-local-approval';
 import { clearControlReplayHistory } from './control-replay-store';
+import { getLocalPairingApprovalStatus } from './control-pairing-recovery';
 
 /**
  * Revoke device access locally. Delete the key FIRST so a storage failure
@@ -10,7 +11,13 @@ import { clearControlReplayHistory } from './control-replay-store';
  */
 export async function disconnectControlPairing(): Promise<void> {
   const grant = await loadControlGrant();
+  // An interrupted pairing can leave a key without a saved grant. Revoke
+  // that credential as well before clearing the pending approval records.
+  const pending = await getLocalPairingApprovalStatus();
   if (grant) await removeControlHmacKey(grant.pairingId);
+  if (pending && pending.consent.pairingId !== grant?.pairingId) {
+    await removeControlHmacKey(pending.consent.pairingId);
+  }
   await clearControlGrant();
   // Also invalidate an unfinished approval so it cannot survive disconnect.
   // Cleanup failures are surfaced to the UI, never reported as success.
