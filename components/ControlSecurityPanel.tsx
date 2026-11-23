@@ -52,6 +52,8 @@ export default function ControlSecurityPanel() {
               await refresh();
             } catch {
               setError('Не удалось удалить ключ. Доступ не считается отозванным.');
+              setStatus(null);
+              setRecovery(null);
             } finally {
               setLoading(false);
             }
@@ -89,7 +91,7 @@ export default function ControlSecurityPanel() {
             <Text style={styles.danger}>Отключить привязку и удалить ключ</Text>
           </Pressable>}
         </>}
-        {recovery?.state !== 'storage-unavailable' && recovery?.state !== 'cleanup-required' && !error && <ControlPairingPreview />}
+        {!loading && !error && recovery && (recovery.state === 'unpaired' || recovery.state === 'pending' || recovery.state === 'paired') && <ControlPairingPreview />}
         {recovery?.state === 'storage-unavailable' && <Text style={styles.error}>Проверьте доступность защищённого хранилища и повторите проверку. Автоматическое удаление отключено.</Text>}
         <Pressable accessibilityRole="button" disabled={loading} onPress={() => void refresh()}>
           <Text style={styles.action}>Обновить состояние</Text>
