@@ -32,6 +32,11 @@ export default function ControlPairingPreview() {
       if (!alive) return;
       setConsented(!!saved);
       setChallengeExpires(saved ? new Date(saved.challenge.expiresAt).toISOString() : '');
+    }).catch(() => {
+      if (!alive) return;
+      setConsented(false);
+      setChallengeExpires('');
+      setError('Не удалось прочитать локальное согласие. Повторите проверку безопасности.');
     });
     return () => { alive = false; };
   }, [expanded]);
