@@ -1,6 +1,7 @@
 import PromptInputGroup from "@/components/groups/prompt-input-group";
 import UsageSummaryView from "@/components/UsageSummaryView";
 import UsageRatesEditor from "@/components/UsageRatesEditor";
+import ControlSecurityPanel from "@/components/ControlSecurityPanel";
 import MessageView from "@/components/views/message/message-view";
 import { useChat, useSystem } from "@/context";
 import { randomUUID } from "expo-crypto";
@@ -61,6 +62,7 @@ function Chat() {
       /> : <View style={styles.list} />}
       <UsageSummaryView />
       <UsageRatesEditor />
+      <ControlSecurityPanel />
       <View style={styles.composer}>
         <PromptInputGroup />
       </View>
