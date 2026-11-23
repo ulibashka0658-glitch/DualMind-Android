@@ -78,7 +78,7 @@ export default function ControlPairingPreview() {
             }}>
               <Text style={styles.action}>Отменить локальное согласие</Text>
             </Pressable>
-        </>
+        </>}
 
         {preview && <>
           <Text style={styles.note}>Идентификатор: {preview.pairingId}</Text>
