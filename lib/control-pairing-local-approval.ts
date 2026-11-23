@@ -2,6 +2,7 @@ import type { ControlScope } from './control-policy';
 import type { PairingRequest } from './control-pairing';
 import type { PairingChallenge } from './control-pairing-proof';
 import { preparePairingConsent } from './control-pairing-consent';
+import { loadControlGrant } from './control-secure-store';
 import { createPendingPairingChallenge, cancelPendingPairingChallenge } from './control-pending-pairing';
 import { storeLocalPairingConsent, clearBoundPairingConsent } from './control-pairing-consent-store';
 
@@ -18,6 +19,9 @@ export async function prepareLocalPairingApproval(
   if (!Number.isSafeInteger(now)) throw new Error('Invalid approval time');
   const consent = preparePairingConsent(request, selectedScopes, new Date(now).toISOString());
   if (!consent) throw new Error('Invalid or expired pairing consent');
+  // Never stage a second pairing over an existing grant. Require explicit
+  // disconnection first, including for expired or revoked grants.
+  if (await loadControlGrant()) throw new Error('Disconnect existing pairing first');
   // Clear previous approval before replacing the pending challenge.
   await clearBoundPairingConsent();
   const challenge = await createPendingPairingChallenge(consent.pairingId, now);
