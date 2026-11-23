@@ -1,6 +1,7 @@
 jest.mock('../../lib/control-hmac', () => ({ removeControlHmacKey: jest.fn() }));
 jest.mock('../../lib/control-pending-pairing', () => ({
   consumePendingPairingProof: jest.fn(),
+  cancelPendingPairingChallenge: jest.fn(),
 }));
 jest.mock('../../lib/control-pairing-consent-store', () => ({
   loadBoundPairingConsent: jest.fn(),
@@ -12,7 +13,7 @@ jest.mock('../../lib/control-secure-store', () => ({
 }));
 
 import { removeControlHmacKey } from '../../lib/control-hmac';
-import { consumePendingPairingProof } from '../../lib/control-pending-pairing';
+import { consumePendingPairingProof, cancelPendingPairingChallenge } from '../../lib/control-pending-pairing';
 import { loadControlGrant, saveControlGrant } from '../../lib/control-secure-store';
 import { finalizeVerifiedPairing } from '../../lib/control-pairing-finalize';
 import { runPairingMutation } from '../../lib/control-pairing-mutex';
@@ -22,6 +23,7 @@ const removeKey = removeControlHmacKey as jest.Mock;
 const bound = loadBoundPairingConsent as jest.Mock;
 const clear = clearBoundPairingConsent as jest.Mock;
 const proof = consumePendingPairingProof as jest.Mock;
+const cancelChallenge = cancelPendingPairingChallenge as jest.Mock;
 const load = loadControlGrant as jest.Mock;
 const save = saveControlGrant as jest.Mock;
 const now = 1795435200000;
@@ -33,6 +35,7 @@ describe('verified pairing finalization', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     proof.mockResolvedValue(true);
+    cancelChallenge.mockResolvedValue(undefined);
     bound.mockResolvedValue(consent);
     clear.mockResolvedValue(undefined);
     load.mockResolvedValue(null);
@@ -57,10 +60,22 @@ describe('verified pairing finalization', () => {
 
   it('persists only approved scopes after successful proof', async () => {
     expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now)).toEqual({ ok: true, reason: 'paired' });
-    expect(proof).toHaveBeenCalledTimes(1);
+    expect(proof).toHaveBeenCalledWith(challenge, 'signature', now, true);
+    expect(cancelChallenge).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith({
       pairingId: id, scopes: ['status:read'], expiresAt: consent.expiresAt, revoked: false,
     });
+  });
+  it('does not remove challenge when grant persistence fails', async () => {
+    save.mockRejectedValueOnce(new Error('locked'));
+    await finalizeVerifiedPairing(consent, challenge, 'signature', now);
+    expect(cancelChallenge).not.toHaveBeenCalled();
+  });
+  it('reports challenge cleanup failure after saving grant', async () => {
+    cancelChallenge.mockRejectedValueOnce(new Error('locked'));
+    expect(await finalizeVerifiedPairing(consent, challenge, 'signature', now))
+      .toEqual({ ok: false, reason: 'pairing-cleanup-failed' });
+    expect(save).toHaveBeenCalledTimes(1);
   });
   it('rejects invalid consent without consuming proof', async () => {
     expect(await finalizeVerifiedPairing({ ...consent, approvedScopes: [] }, challenge, 'signature', now))
