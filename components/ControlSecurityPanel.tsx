@@ -3,10 +3,12 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { disconnectControlPairing } from '@/lib/control-lifecycle';
 import { getControlConnectionStatus, type ControlConnectionStatus } from '@/lib/control-status';
 import ControlPairingPreview from '@/components/ControlPairingPreview';
+import { inspectPairingRecoveryState, type PairingRecoveryState } from '@/lib/control-pairing-recovery-state';
 
 export default function ControlSecurityPanel() {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<ControlConnectionStatus | null>(null);
+  const [recovery, setRecovery] = useState<PairingRecoveryState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -14,10 +16,15 @@ export default function ControlSecurityPanel() {
     setLoading(true);
     setError('');
     try {
-      setStatus(await getControlConnectionStatus());
+      const [connection, restartState] = await Promise.all([
+        getControlConnectionStatus(), inspectPairingRecoveryState(),
+      ]);
+      setStatus(connection);
+      setRecovery(restartState);
     } catch {
       setError('Не удалось прочитать состояние безопасности.');
       setStatus(null);
+      setRecovery(null);
     } finally {
       setLoading(false);
     }
@@ -58,13 +65,22 @@ export default function ControlSecurityPanel() {
         <Text style={styles.text}>Удалённое управление пока не включено. Эта панель показывает только локальные настройки безопасности.</Text>
         {loading && <Text style={styles.text}>Проверка...</Text>}
         {!!error && <Text style={styles.error}>{error}</Text>}
+        {recovery && <Text style={recovery.state === 'cleanup-required' || recovery.state === 'storage-unavailable' ? styles.error : styles.text}>
+          Восстановление после перезапуска: {{
+            unpaired: 'подключения нет',
+            pending: 'подтверждение не завершено',
+            paired: 'разрешения сохранены',
+            'cleanup-required': 'обнаружены незавершённые записи, требуется ручная очистка',
+            'storage-unavailable': 'хранилище недоступно или данные повреждены',
+          }[recovery.state]}
+        </Text>}
         {status && <>
           <Text style={styles.text}>Привязка: {status.paired ? 'есть' : 'нет'}</Text>
           <Text style={styles.text}>Локальное разрешение: {status.active ? 'действует' : 'неактивно'}</Text>
           <Text style={styles.text}>Криптография: {status.cryptoAvailable ? 'доступна' : 'недоступна'} ({status.cryptoReason})</Text>
           <Text style={styles.text}>Срок доступа: {status.expiresAt ?? 'не задан'}</Text>
           <Text style={styles.text}>Разрешения: {status.scopes.length ? status.scopes.join(', ') : 'нет'}</Text>
-          {status.paired && <Pressable accessibilityRole="button" disabled={loading} onPress={disconnect}>
+          {(status.paired || recovery?.state === 'pending' || recovery?.state === 'cleanup-required') && <Pressable accessibilityRole="button" disabled={loading} onPress={disconnect}>
             <Text style={styles.danger}>Отключить привязку и удалить ключ</Text>
           </Pressable>}
         </>}
