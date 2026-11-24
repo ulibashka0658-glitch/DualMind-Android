@@ -9,7 +9,7 @@ import { ImagePickerAsset } from "expo-image-picker";
 import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 import { addNode, getConversation, updateContent } from "message-nodes";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 
 interface PromptButtonProps {
   promptText: string; 
@@ -28,7 +28,15 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
   const transcriptRef = useRef("");
 
   const prompt = () => {
-    if (!LLM.ready) return;
+    if (!LLM.ready || LLM.busy) return;
+    if (images.length && !LLM.imagesSupported) {
+      Alert.alert("Нужна модель с поддержкой изображений", "Переключите модель или удалите вложения перед отправкой.");
+      return;
+    }
+    if (images.some(image => !image.base64 || !image.mimeType)) {
+      Alert.alert("Не удалось прочитать изображение", "Удалите повреждённое вложение и выберите его повторно.");
+      return;
+    }
 
     let next = mappings;
     let parent: string | undefined;
@@ -235,7 +243,7 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
       />
     );
   }
-  else if (promptText.trim().length > 0) {
+  else if (promptText.trim().length > 0 || images.length > 0) {
     return (
       <MaterialIconButton
         testID="send-button"
