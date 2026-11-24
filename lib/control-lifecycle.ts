@@ -45,7 +45,7 @@ export async function inspectControlCrypto(): Promise<{
       'raw', secret, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
     ) : null;
     const verify = (signature: Uint8Array) => subtle && key
-      ? subtle.verify('HMAC', key, signature, new Uint8Array(0))
+      ? subtle.verify('HMAC', key, new Uint8Array(signature), new Uint8Array(0))
       : verifyPlatformControlMac(secret, '', signature);
     const valid = await verify(expected);
     expected[0] ^= 1;
