@@ -59,6 +59,7 @@ export default function ControlPairingPreview() {
         <TextInput
           accessibilityLabel="JSON запроса привязки"
           style={styles.input}
+          editable={!busy}
           value={input}
           onChangeText={value => { setInput(value); setPreview(null); setSelected([]); setError(''); }}
           multiline
@@ -66,7 +67,7 @@ export default function ControlPairingPreview() {
           placeholder="JSON запроса привязки"
           placeholderTextColor="#888"
         />
-        <Pressable accessibilityRole="button" onPress={inspect}>
+        <Pressable accessibilityRole="button" disabled={busy} onPress={inspect}>
           <Text style={styles.action}>Проверить запрос</Text>
         </Pressable>
         {!!error && <Text style={styles.error}>{error}</Text>}
@@ -96,7 +97,7 @@ export default function ControlPairingPreview() {
           <Text style={styles.note}>Действует до: {preview.expiresAt}</Text>
           <Text style={styles.note}>Запрошенные разрешения:</Text>
           {preview.requestedScopes.map(scope =>
-            <Pressable key={scope} accessibilityRole="checkbox" accessibilityState={{ checked: selected.includes(scope) }} onPress={() => { setSelected(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]); }}>
+            <Pressable key={scope} accessibilityRole="checkbox" disabled={busy} accessibilityState={{ checked: selected.includes(scope), disabled: busy }} onPress={() => { setSelected(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]); }}>
               <Text style={styles.note}>{selected.includes(scope) ? '☑' : '☐'} {labels[scope] ?? scope}</Text>
             </Pressable>)}
           <Pressable accessibilityRole="button" disabled={busy} onPress={async () => {
