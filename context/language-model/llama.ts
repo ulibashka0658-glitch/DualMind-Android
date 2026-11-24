@@ -184,13 +184,16 @@ export async function connectLlama(
 
   if (projectorFile) {
     try {
-      await llama.initMultimodal({
+      const initialized = await llama.initMultimodal({
         path: projectorFile,
         use_gpu: true
       });
 
+      if (initialized === false) {
+        throw new Error("Multimodal projector initialization failed");
+      }
       const support = await llama.getMultimodalSupport();
-      imagesSupported = support.vision;
+      imagesSupported = support.vision === true;
     } catch (error) {
       await llama.release();
       throw error;
