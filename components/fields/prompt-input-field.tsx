@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import { useSystem } from "@/context";
 import { Dispatch, SetStateAction } from "react";
 import { StyleSheet, TextInput } from "react-native";
@@ -9,6 +10,7 @@ interface PromptInputFieldProps {
 
 function PromptInputField({ promptText, setPromptText }: PromptInputFieldProps) {
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
   const styles = StyleSheet.create({
     input: {
@@ -24,7 +26,7 @@ function PromptInputField({ promptText, setPromptText }: PromptInputFieldProps) 
     <TextInput
       testID="prompt-input"
       style={styles.input}
-      placeholder="Введите сообщение..."
+      placeholder={translateUi(language, "Введите сообщение...", "Enter a message...")}
       placeholderTextColor={colorScheme.onSurface}
       underlineColorAndroid="transparent"
       multiline
