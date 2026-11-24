@@ -163,6 +163,11 @@ export async function connectLlama(
       ? projectorFiles[projectorKey]
       : undefined;
 
+  // Revalidate persisted projector paths before passing them to native code.
+  if (projectorFile && !(await isGGUF(projectorFile))) {
+    throw new Error("Selected multimodal projector is missing or is not a valid GGUF file");
+  }
+
   const { response_language: _responseLanguage, ...contextParameters } = parameters;
   const llama = await measureLlama("load", () => initLlama({
     model: modelFile,
