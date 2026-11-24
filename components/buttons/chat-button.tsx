@@ -3,11 +3,12 @@ import { useChat, useSystem } from "@/context";
 import * as FileSystem from "expo-file-system/legacy";
 import { deleteNode, getRootMapping, MessageNode, updateContent } from "message-nodes";
 import { useEffect, useRef, useState } from "react";
-import { Alert, LayoutRectangle, StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
+import { Alert, LayoutRectangle, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions } from "react-native";
 
 function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: string }) {
   const { root, setRoot, mappings, setMappings } = useChat();
   const { colorScheme } = useSystem();
+  const { width: screenWidth, fontScale } = useWindowDimensions();
   const [visible, setVisible] = useState<boolean>(false);
   const [rename, setRename] = useState<boolean>(false);
   const [renameEvent, setRenameEvent] = useState<string>("");
@@ -89,7 +90,7 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
       color: colorScheme.primary
     },
     popoverButton: {
-      paddingVertical: 8,
+      paddingVertical: 12,
       paddingHorizontal: 12,
       color: colorScheme.onSurface,
       fontSize: 16,
@@ -133,7 +134,7 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
         position="bottom"
         anchor={anchor}
         offset={{ y: (anchor?.height ?? 0) }}
-        width={120}
+        width={Math.min( Math.max(220, 196 * fontScale), Math.max(1, screenWidth - 32))}
         visible={visible}
         onClose={() => setVisible(false)}
       >
