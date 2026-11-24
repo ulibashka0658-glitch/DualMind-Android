@@ -1,3 +1,12 @@
+import { createHash } from 'crypto';
+import { Buffer } from 'buffer';
+import * as Crypto from 'expo-crypto';
+
+jest.mock('expo-crypto', () => ({
+  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  digest: jest.fn(),
+}));
+
 jest.mock('../../lib/control-pairing-recovery', () => ({ getStoredPendingPairingId: jest.fn() }));
 jest.mock('../../lib/control-replay-store', () => ({ clearControlReplayHistory: jest.fn() }));
 jest.mock('../../lib/control-pairing-local-approval', () => ({
@@ -127,5 +136,38 @@ describe('HMAC capability self-test', () => {
     });
     expect((await inspectControlCrypto()).available).toBe(available);
     expect(verify).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Android HMAC capability without WebCrypto', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const digest = Crypto.digest as jest.Mock;
+  beforeEach(() => {
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
+    digest.mockReset();
+    digest.mockImplementation(async (_algorithm, bytes) =>
+      Uint8Array.from(createHash('sha256').update(Buffer.from(bytes)).digest()).buffer,
+    );
+  });
+  afterEach(() => {
+    if (original) Object.defineProperty(globalThis, 'crypto', original);
+    else Reflect.deleteProperty(globalThis, 'crypto');
+    digest.mockReset();
+  });
+  it('reports available only after validating the known MAC and rejecting its mutation', async () => {
+    expect(await inspectControlCrypto()).toEqual({ available: true, reason: 'available' });
+    expect(digest).toHaveBeenCalledTimes(4);
+  });
+  it('fails closed when native SHA-256 rejects', async () => {
+    digest.mockRejectedValue(new Error('native digest unavailable'));
+    expect(await inspectControlCrypto()).toEqual({ available: false, reason: 'hmac-unavailable' });
+  });
+  it('rejects malformed digest output', async () => {
+    digest.mockResolvedValue(new ArrayBuffer(16));
+    expect(await inspectControlCrypto()).toEqual({ available: false, reason: 'hmac-unavailable' });
+  });
+  it('rejects incorrect SHA-256 output even when its length is correct', async () => {
+    digest.mockResolvedValue(new ArrayBuffer(32));
+    expect(await inspectControlCrypto()).toEqual({ available: false, reason: 'hmac-unavailable' });
   });
 });
