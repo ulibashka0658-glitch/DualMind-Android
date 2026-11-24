@@ -1,0 +1,57 @@
+name: Build Maid Standalone Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/dualmind-maid-android.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset}"
+          test -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -maxdepth 3 -name sdkmanager -type f -print || true
+          java -version
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Build standalone release APK (bundled JavaScript)
+        shell: bash
+        run: |
+          set -o pipefail
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace assembleRelease 2>&1 | tee ../android-build.log
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maid-build-diagnostics
+          path: android-build.log
+          if-no-files-found: warn
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DualMind-Maid-standalone-APK
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
