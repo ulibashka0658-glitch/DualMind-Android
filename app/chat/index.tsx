@@ -6,7 +6,8 @@ import MessageView from "@/components/views/message/message-view";
 import { useChat, useSystem } from "@/context";
 import { randomUUID } from "expo-crypto";
 import { getConversation, hasNode, MessageNode } from "message-nodes";
-import { FlatList, StyleSheet, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -14,6 +15,7 @@ function Chat() {
   const { colorScheme } = useSystem();
   const { mappings, root } = useChat();
   const insets = useSafeAreaInsets();
+  const [showInfo, setShowInfo] = useState(false);
 
   const renderItem = ({ item }: { item: MessageNode }) => (
     <MessageView
@@ -60,9 +62,14 @@ function Chat() {
         keyExtractor={(item) => item.id?.toString() ?? randomUUID()}
         renderItem={renderItem}
       /> : <View style={styles.list} />}
-      <UsageSummaryView />
-      <UsageRatesEditor />
-      <ControlSecurityPanel />
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: showInfo }} onPress={() => setShowInfo(value => !value)} style={{ padding: 8 }}>
+        <Text style={{ color: colorScheme.primary }}>{showInfo ? "Скрыть статистику и безопасность ▲" : "Статистика и безопасность ▼"}</Text>
+      </Pressable>
+      {showInfo && <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
+        <UsageSummaryView />
+        <UsageRatesEditor />
+        <ControlSecurityPanel />
+      </ScrollView>}
       <View style={styles.composer}>
         <PromptInputGroup />
       </View>
