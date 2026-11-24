@@ -108,3 +108,24 @@ describe('device control lifecycle', () => {
     expect(['available', 'webcrypto-unavailable', 'hmac-unavailable']).toContain(result.reason);
   });
 });
+
+describe('HMAC capability self-test', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  afterEach(() => {
+    if (original) Object.defineProperty(globalThis, 'crypto', original);
+    else Reflect.deleteProperty(globalThis, 'crypto');
+  });
+  it.each([
+    [true, false, true],
+    [true, true, false],
+    [false, false, false],
+  ])('accepts only correct verification behavior (%s, %s)', async (valid, invalid, available) => {
+    const verify = jest.fn().mockResolvedValueOnce(valid).mockResolvedValueOnce(invalid);
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: { subtle: { importKey: jest.fn().mockResolvedValue({}), verify } },
+    });
+    expect((await inspectControlCrypto()).available).toBe(available);
+    expect(verify).toHaveBeenCalledTimes(2);
+  });
+});
