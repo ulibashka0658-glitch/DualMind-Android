@@ -24,13 +24,16 @@ export default function ControlPairingPreview() {
   const [selected, setSelected] = useState<ControlScope[]>([]);
   const [consented, setConsented] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [recoveryReady, setRecoveryReady] = useState(false);
   const [challengeExpires, setChallengeExpires] = useState('');
   useEffect(() => {
     if (!expanded) return;
     let alive = true;
+    setRecoveryReady(false);
     void getLocalPairingApprovalStatus().then(saved => {
       if (!alive) return;
       setConsented(!!saved);
+      setRecoveryReady(true);
       setChallengeExpires(saved ? new Date(saved.challenge.expiresAt).toISOString() : '');
     }).catch(() => {
       if (!alive) return;
@@ -48,7 +51,7 @@ export default function ControlPairingPreview() {
   };
   return (
     <View style={styles.wrap}>
-      <Pressable accessibilityRole="button" onPress={() => setExpanded(value => !value)}>
+      <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setRecoveryReady(false); setExpanded(value => !value); }}>
         <Text style={styles.heading}>{expanded ? 'Скрыть проверку привязки' : 'Проверить запрос привязки'}</Text>
       </Pressable>
       {expanded && <View style={styles.fields}>
@@ -87,7 +90,7 @@ export default function ControlPairingPreview() {
           </View>
         ) : null}
 
-        {preview && !consented ? (
+        {preview && !consented && recoveryReady ? (
           <View>
           <Text style={styles.note}>Идентификатор: {preview.pairingId}</Text>
           <Text style={styles.note}>Действует до: {preview.expiresAt}</Text>
