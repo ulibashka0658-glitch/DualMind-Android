@@ -119,7 +119,7 @@ export async function pickModelFile(modelFiles: Record<string, string>): Promise
   const asset = await pickFile();
   if (!asset) return;
 
-  if (!/\.gguf$/i.test(asset.uri) || !(await isGGUF(asset.uri))) {
+  if (!/\.gguf$/i.test(asset.name) || !(await isGGUF(asset.uri))) {
     alert("Please select a valid GGUF model file");
     return;
   }
@@ -131,8 +131,8 @@ export async function pickProjectorFile(projectorFiles: Record<string, string>):
   const asset = await pickFile();
   if (!asset) return;
 
-  if (!/\.mmproj$/i.test(asset.uri) && !/\.gguf$/i.test(asset.uri)) {
-    alert("Please select a multimodel projector file");
+  if (!/\.(mmproj|gguf)$/i.test(asset.name) || !(await isGGUF(asset.uri))) {
+    alert("Please select a valid GGUF multimodal projector file");
     return;
   }
 
