@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Buffer } from 'buffer';
 import * as Crypto from 'expo-crypto';
+import { verifyPlatformControlMac } from './control-platform-mac';
 import type { VerifyControlSignature } from './control-signed-request';
 import { getLocalPairingApprovalStatus } from './control-pairing-recovery';
 import { loadControlGrant } from './control-secure-store';
@@ -11,7 +12,7 @@ let provisionQueue: Promise<unknown> = Promise.resolve();
 
 /**
  * HMAC-SHA256 verification using platform WebCrypto when available.
- * Fails closed if WebCrypto is unavailable (no insecure hash fallback).
+ * Uses platform SHA-256 HMAC when WebCrypto is absent. Both paths fail closed.
  * Keys must be generated via a trusted pairing ceremony, never accepted
  * from an untrusted command request.
  */
@@ -19,13 +20,13 @@ export const verifyControlHmac: VerifyControlSignature = async (message, signatu
   if (!pairingId || !/^[a-zA-Z0-9_-]{1,128}$/.test(pairingId) ||
       !/^[A-Za-z0-9+/]{43}=$/.test(signature)) return false;
   const subtle = globalThis.crypto?.subtle;
-  if (!subtle) return false;
   try {
     const storedKey = await SecureStore.getItemAsync(KEY_PREFIX + pairingId);
     if (!storedKey || !/^[A-Za-z0-9+/]{43}=$/.test(storedKey)) return false;
     const secret = Buffer.from(storedKey, 'base64');
     const supplied = Buffer.from(signature, 'base64');
     if (secret.length !== 32 || supplied.length !== 32) return false;
+    if (!subtle) return await verifyPlatformControlMac(secret, message, supplied);
     const key = await subtle.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
     return await subtle.verify('HMAC', key, supplied, Buffer.from(message, 'utf8'));
   } catch {
