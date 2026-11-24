@@ -1,3 +1,4 @@
+import { verifyPlatformControlMac } from './control-platform-mac';
 import { removeControlHmacKey } from './control-hmac';
 import { clearControlGrant, loadControlGrant } from './control-secure-store';
 import { clearLocalPairingApprovalRecords } from './control-pairing-local-approval';
@@ -35,18 +36,20 @@ export async function inspectControlCrypto(): Promise<{
   reason: 'available' | 'webcrypto-unavailable' | 'hmac-unavailable';
 }> {
   const subtle = globalThis.crypto?.subtle;
-  if (!subtle) return { available: false, reason: 'webcrypto-unavailable' };
   try {
-    const key = await subtle.importKey(
-      'raw', new Uint8Array(32),
-      { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
-    );
     // A known-answer test must accept a valid MAC and reject an altered one.
     // HMAC-SHA256 with 32 zero key bytes and an empty message.
     const expected = Uint8Array.from([0xb6,0x13,0x67,0x9a,0x08,0x14,0xd9,0xec,0x77,0x2f,0x95,0xd7,0x78,0xc3,0x5f,0xc5,0xff,0x16,0x97,0xc4,0x93,0x71,0x56,0x53,0xc6,0xc7,0x12,0x14,0x42,0x92,0xc5,0xad]);
-    const valid = await subtle.verify('HMAC', key, expected, new Uint8Array(0));
+    const secret = new Uint8Array(32);
+    const key = subtle ? await subtle.importKey(
+      'raw', secret, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
+    ) : null;
+    const verify = (signature: Uint8Array) => subtle && key
+      ? subtle.verify('HMAC', key, signature, new Uint8Array(0))
+      : verifyPlatformControlMac(secret, '', signature);
+    const valid = await verify(expected);
     expected[0] ^= 1;
-    const invalid = await subtle.verify('HMAC', key, expected, new Uint8Array(0));
+    const invalid = await verify(expected);
     if (valid !== true || invalid !== false) return { available: false, reason: 'hmac-unavailable' };
     return { available: true, reason: 'available' };
   } catch {
