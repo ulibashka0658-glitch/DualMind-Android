@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import { useSystem } from "@/context";
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePickerAsset } from "expo-image-picker";
@@ -11,6 +12,7 @@ interface PromptImageButtonProps {
 
 function PromptImageButton({ setImages }: PromptImageButtonProps) {
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
   const onImagePress = async () => {
     try {
@@ -25,7 +27,10 @@ function PromptImageButton({ setImages }: PromptImageButtonProps) {
       setImages(images => [ ...images || [], ...pickerResult.assets ]);
     }
     } catch {
-      Alert.alert("Не удалось открыть галерею", "Повторите попытку или проверьте разрешения приложения.");
+      Alert.alert(
+        translateUi(language, "Не удалось открыть галерею", "Unable to open gallery"),
+        translateUi(language, "Повторите попытку или проверьте разрешения приложения.", "Try again or check the app permissions."),
+      );
     }
   };
 
