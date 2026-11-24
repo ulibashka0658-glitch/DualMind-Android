@@ -1,4 +1,4 @@
-import { useLLM, useSystem } from "@/context";
+import { useSystem } from "@/context";
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePickerAsset } from "expo-image-picker";
 import { Dispatch, SetStateAction } from "react";
@@ -10,14 +10,9 @@ interface PromptImageButtonProps {
 };
 
 function PromptImageButton({ setImages }: PromptImageButtonProps) {
-  const { imagesSupported } = useLLM();
   const { colorScheme } = useSystem();
 
   const onImagePress = async () => {
-    if (!imagesSupported) {
-      Alert.alert("Изображения не поддерживаются", "Текущая модель не умеет анализировать изображения. Выберите модель с поддержкой изображений.");
-      return;
-    }
     try {
 
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
