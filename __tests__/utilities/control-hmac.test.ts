@@ -1,6 +1,7 @@
+import { createHash, createHmac } from 'crypto';
 jest.mock('../../lib/control-secure-store', () => ({ loadControlGrant: jest.fn() }));
 jest.mock('../../lib/control-pairing-recovery', () => ({ getLocalPairingApprovalStatus: jest.fn() }));
-jest.mock('expo-crypto', () => ({ getRandomBytesAsync: jest.fn() }));
+jest.mock('expo-crypto', () => ({ getRandomBytesAsync: jest.fn(), CryptoDigestAlgorithm: { SHA256: 'SHA-256' }, digest: jest.fn() }));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
@@ -129,5 +130,51 @@ describe('device-bound HMAC verification', () => {
   it('rejects when platform cryptography or secure storage is unavailable', async () => {
     (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
     expect(await verifyControlHmac('message', signature, 'pair-1')).toBe(false);
+  });
+});
+
+describe('secure-store HMAC without WebCrypto', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const digest = Crypto.digest as jest.Mock;
+  const read = SecureStore.getItemAsync as jest.Mock;
+  const message = 'Проверка подписи';
+  const signed = createHmac('sha256', Buffer.from(key, 'base64')).update(message).digest('base64');
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
+    read.mockResolvedValue(key);
+    digest.mockReset();
+    digest.mockImplementation(async (_algorithm, bytes) =>
+      Uint8Array.from(createHash('sha256').update(Buffer.from(bytes)).digest()).buffer,
+    );
+  });
+  afterEach(() => {
+    if (original) Object.defineProperty(globalThis, 'crypto', original);
+    else Reflect.deleteProperty(globalThis, 'crypto');
+    digest.mockReset();
+    read.mockReset();
+  });
+  it('accepts a valid signature using the pairing-specific stored key', async () => {
+    expect(await verifyControlHmac(message, signed, 'pair-1')).toBe(true);
+    expect(read).toHaveBeenCalledWith('dualmind-control-hmac-v1-pair-1');
+  });
+  it('rejects altered messages and signatures', async () => {
+    expect(await verifyControlHmac(message + '!', signed, 'pair-1')).toBe(false);
+    const altered = Buffer.from(signed, 'base64');
+    altered[0] ^= 1;
+    expect(await verifyControlHmac(message, altered.toString('base64'), 'pair-1')).toBe(false);
+  });
+  it('rejects a different stored key', async () => {
+    read.mockResolvedValueOnce(Buffer.alloc(32, 8).toString('base64'));
+    expect(await verifyControlHmac(message, signed, 'pair-1')).toBe(false);
+  });
+  it('fails closed when secure storage rejects', async () => {
+    read.mockRejectedValueOnce(new Error('locked'));
+    expect(await verifyControlHmac(message, signed, 'pair-1')).toBe(false);
+    expect(digest).not.toHaveBeenCalled();
+  });
+  it('fails closed when native digest rejects', async () => {
+    digest.mockRejectedValueOnce(new Error('unavailable'));
+    expect(await verifyControlHmac(message, signed, 'pair-1')).toBe(false);
   });
 });
