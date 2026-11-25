@@ -45,11 +45,18 @@ async function isGGUF(fileUri: string): Promise<boolean> {
   }
 };
 
-function parseMessages(messages: Array<MessageNode>): Array<RNLlamaOAICompatibleMessage> {
-  return messages.map((message) => {
+export function parseMessages(messages: Array<MessageNode>, imagesSupported: boolean): Array<RNLlamaOAICompatibleMessage> {
+  const lastUserIndex = messages.map(message => message.role).lastIndexOf("user");
+  return messages.map((message, index) => {
     const images: Array<string> | undefined = (message.metadata as any)?.images;
 
     if (images && images.length > 0) {
+      if (!imagesSupported) {
+        if (index === lastUserIndex) {
+          throw new Error("The selected model does not support images");
+        }
+        return { role: message.role, content: String(message.content ?? "") + "\n[Image unavailable to the selected text-only model]" } as RNLlamaOAICompatibleMessage;
+      }
       return {
         role: message.role,
         content: [
@@ -212,7 +219,7 @@ export async function connectLlama(
         temperature: bounded("temperature", 0.6, 0, 2),
         top_p: bounded("top_p", 0.9, 0, 1),
         top_k: Math.round(bounded("top_k", 40, 0, 200)),
-        messages: withRussianLanguageHint(parseMessages(messages), sampling.response_language)
+        messages: withRussianLanguageHint(parseMessages(messages, imagesSupported), sampling.response_language)
       }, (data) => onUpdate(data.token)));
 
       const usage = readLlamaCompletionUsage(result.timings);
