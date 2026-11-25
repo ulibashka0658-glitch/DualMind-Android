@@ -1,4 +1,4 @@
-import { connectLlama } from "../../context/language-model/llama";
+import { connectLlama, parseMessages } from "../../context/language-model/llama";
 import type { LanguageModelSettings } from "../../context/language-model/types";
 import { initLlama } from "llama.rn";
 import * as FileSystem from "expo-file-system/legacy";
@@ -69,5 +69,41 @@ describe("local vision initialization", () => {
   it("does not advertise vision when the engine reports no vision support", async () => {
     native.getMultimodalSupport.mockResolvedValue({ vision: false });
     expect((await connectLlama(settings))?.imagesSupported).toBe(false);
+  });
+});
+
+describe("image context when switching models", () => {
+  const image = "data:image/png;base64,AAAA";
+  const history = () => [
+    { role: "user", content: "Describe this", metadata: { images: [image] } },
+    { role: "assistant", content: "Description" },
+    { role: "user", content: "Continue" },
+  ] as unknown as Parameters<typeof parseMessages>[0];
+
+  it("preserves image parts for vision inference", () => {
+    expect(parseMessages(history(), true)[0].content).toEqual([
+      { type: "text", text: "Describe this" },
+      { type: "image_url", image_url: { url: image } },
+    ]);
+  });
+  it("replaces historical images with a notice for text-only inference", () => {
+    const result = parseMessages(history(), false);
+    expect(result[0].content).toBe("Describe this\n[Image unavailable to the selected text-only model]");
+    expect(result[2].content).toBe("Continue");
+    expect(JSON.stringify(result)).not.toContain(image);
+  });
+  it("does not mutate saved messages when switching models", () => {
+    const messages = history();
+    const original = JSON.stringify(messages);
+    parseMessages(messages, false);
+    expect(JSON.stringify(messages)).toBe(original);
+    expect(JSON.stringify(parseMessages(messages, true))).toContain(image);
+  });
+  it("rejects a current image request on a text-only model", () => {
+    expect(() => parseMessages(history().slice(0, 1), false)).toThrow("does not support images");
+  });
+  it("leaves text-only conversations unchanged", () => {
+    const messages = history().slice(1);
+    expect(parseMessages(messages, false)).toEqual(messages);
   });
 });
