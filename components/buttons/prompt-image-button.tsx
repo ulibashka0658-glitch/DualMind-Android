@@ -19,7 +19,8 @@ function PromptImageButton({ setImages }: PromptImageButtonProps) {
 
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 1,
+      // Reduce JPEG encoding size for inference attachments; original gallery files are unchanged.
+      quality: 0.8,
       base64: true,
     });
 
