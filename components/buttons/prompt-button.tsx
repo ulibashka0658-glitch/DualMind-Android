@@ -41,6 +41,12 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
       return;
     }
 
+    // Bound the combined encoded payload before persisting it or invoking a provider.
+    if (images.reduce((total, image) => total + (image.base64?.length ?? 0), 0) > 8 * 1024 * 1024) {
+      Alert.alert(t("Слишком много данных во вложениях", "Attachments are too large"), t("Уменьшите количество или размер фотографий. Общий лимит: 6 МиБ изображений после кодирования JPEG.", "Reduce the number or size of photos. Combined limit: 6 MiB of JPEG image data."));
+      return;
+    }
+
     let next = mappings;
     let parent: string | undefined;
 
