@@ -1,4 +1,5 @@
 import { Mistral } from '@mistralai/mistralai';
+import { readMistralUsage } from '@/lib/mistral-usage';
 import { TextChunk } from "@mistralai/mistralai/models/components";
 import { isValidURL, LanguageModelClient, LanguageModelSettings } from "./types";
 
@@ -23,7 +24,7 @@ export async function connectMistral(
       const response = await mistral.models.list();
       return { models: response.data?.map((model) => model.id) ?? [] };
     },
-    prompt: async ({ model, messages, parameters, onUpdate, shouldStop }) => {
+    prompt: async ({ model, messages, parameters, onUpdate, onUsage, shouldStop }) => {
       const response = await mistral.chat.complete({
         model,
         messages: messages.map((msg) => ({
@@ -32,6 +33,9 @@ export async function connectMistral(
         })),
         ...parameters,
       });
+
+      const usage = readMistralUsage(response.usage);
+      if (usage) onUsage?.(usage);
 
       const content = response.choices[0]?.message?.content ?? "";
 

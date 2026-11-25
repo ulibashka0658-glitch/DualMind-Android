@@ -18,7 +18,7 @@ jest.mock("@/context/ui-language", () => ({
 jest.mock("expo-application", () => ({}));
 jest.mock("expo-device", () => ({}));
 jest.mock("expo-network", () => ({ getNetworkStateAsync: jest.fn() }));
-jest.mock("expo-crypto", () => ({ randomUUID: jest.fn(() => "local-command-" + Math.random().toString(36).slice(2)) }));
+jest.mock("expo-crypto", () => ({ CryptoDigestAlgorithm: { SHA256: "SHA-256" }, digest: jest.fn(async (_algorithm, bytes) => Uint8Array.from(require("crypto").createHash("sha256").update(Buffer.from(bytes)).digest()).buffer), randomUUID: jest.fn(() => "local-command-" + Math.random().toString(36).slice(2)) }));
 jest.mock("@/utilities/logger", () => ({
   getLogs: () => [],
   subscribeLogs: () => () => {},

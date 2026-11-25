@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import ChatButton from "@/components/buttons/chat-button";
 import { MaterialIconButton } from "@/components/buttons/icon-button";
 import ConfirmView from "@/components/views/confirm-view";
@@ -15,6 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 function DrawerContent() {
   const { mappings, setMappings, setRoot } = useChat();
   const { colorScheme, systemPrompt } = useSystem();
+  const { language } = useUiLanguage();
+  const t = (ru: string, en: string) => translateUi(language, ru, en);
   const insets = useSafeAreaInsets();
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
   const [showArchive, setShowArchive] = useState(false);
@@ -116,8 +119,8 @@ function DrawerContent() {
     <View testID="drawer-content" style={styles.view}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => setShowArchive(prev => !prev)}>
-          <Text style={styles.controlsText}>{showArchive ? `Архив (${archivedRoots.length})` : `Чаты (${activeRoots.length})`}</Text>
-          <Text style={{ color: colorScheme.primary, fontSize: 12 }}>{showArchive ? "Показать чаты" : "Открыть архив"}</Text>
+          <Text style={styles.controlsText}>{showArchive ? `${t("Архив", "Archive")} (${archivedRoots.length})` : `${t("Чаты", "Chats")} (${activeRoots.length})`}</Text>
+          <Text style={{ color: colorScheme.primary, fontSize: 12 }}>{showArchive ? t("Показать чаты", "Show chats") : t("Открыть архив", "Open archive")}</Text>
         </TouchableOpacity>
         <View style={styles.controls}>
           <MaterialIconButton
@@ -154,7 +157,7 @@ function DrawerContent() {
         confirmTestID="clear-chats-confirm-button"
         cancelTestID="clear-chats-cancel-button"
         visible={showClearConfirm}
-        message="Are you sure you want to clear all chats? This action cannot be undone."
+        message={t("Удалить все чаты, включая архив? Это действие нельзя отменить.", "Delete all chats, including archived chats? This action cannot be undone.")}
         onConfirm={clearChats}
         onCancel={() => setShowClearConfirm(false)}
       />

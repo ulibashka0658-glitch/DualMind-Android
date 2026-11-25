@@ -1,7 +1,9 @@
-import { useLLM, useSystem } from "@/context";
+import { useUiLanguage, translateUi } from "@/context/ui-language";
+import { useSystem } from "@/context";
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePickerAsset } from "expo-image-picker";
-import { Dispatch, SetStateAction } from "react";
+import { Dispatch, SetStateAction, useRef } from "react";
+import { Alert } from "react-native";
 import { MaterialIconButton } from "./icon-button";
 
 interface PromptImageButtonProps {
@@ -9,25 +11,38 @@ interface PromptImageButtonProps {
 };
 
 function PromptImageButton({ setImages }: PromptImageButtonProps) {
-  const { imagesSupported } = useLLM();
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
+  const picking = useRef(false);
   const onImagePress = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (permissionResult.granted === false) {
-      alert("Permission to access camera roll is required!");
-      return;
-    }
+    if (picking.current) return;
+    picking.current = true;
+    try {
 
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 1,
+      // Reduce JPEG encoding size for inference attachments; original gallery files are unchanged.
+      quality: 0.8,
       base64: true,
     });
 
     if (!pickerResult.canceled) {
-      setImages(images => [ ...images || [], ...pickerResult.assets ]);
+      const assets = pickerResult.assets;
+      if (assets.some(asset => !asset.base64 || asset.base64.length > 8 * 1024 * 1024)) {
+        Alert.alert(translateUi(language, "Слишком большое или недоступное изображение", "Image too large or unavailable"),
+          translateUi(language, "Выберите изображение меньшего размера (до 6 МиБ после кодирования JPEG).", "Choose a smaller image (up to 6 MiB after JPEG encoding)."));
+        return;
+      }
+      setImages(images => [ ...images || [], ...assets ]);
+    }
+    } catch {
+      Alert.alert(
+        translateUi(language, "Не удалось открыть галерею", "Unable to open gallery"),
+        translateUi(language, "Повторите попытку или проверьте разрешения приложения.", "Try again or check the app permissions."),
+      );
+    } finally {
+      picking.current = false;
     }
   };
 
@@ -37,7 +52,6 @@ function PromptImageButton({ setImages }: PromptImageButtonProps) {
       size={28}
       color={colorScheme.primary}
       onPress={onImagePress}
-      disabled={!imagesSupported}
     />
   );
 };

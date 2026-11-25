@@ -1,3 +1,7 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
+import type { TokenUsage } from "@/lib/token-usage";
+import { readUsageRates } from "@/lib/usage-rates";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialIconButton } from "@/components/buttons/icon-button";
 import { useChat, useLLM, useSystem } from "@/context";
 import getMetadata from "@/utilities/metadata";
@@ -6,7 +10,7 @@ import { ImagePickerAsset } from "expo-image-picker";
 import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 import { addNode, getConversation, updateContent } from "message-nodes";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 
 interface PromptButtonProps {
   promptText: string; 
@@ -19,13 +23,29 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
   const { mappings, setMappings, root, setRoot } = useChat();
   const { colorScheme, systemPrompt } = useSystem();
   const LLM = useLLM();
+  const { language } = useUiLanguage();
+  const t = (ru: string, en: string) => translateUi(language, ru, en);
 
   const [dictating, setDictating] = useState(false);
   const [startingDictation, setStartingDictation] = useState(false);
   const transcriptRef = useRef("");
 
   const prompt = () => {
-    if (!LLM.ready) return;
+    if (!LLM.ready || LLM.busy) return;
+    if (images.length && !LLM.imagesSupported) {
+      Alert.alert(t("Нужна модель с поддержкой изображений", "An image-capable model is required"), t("Переключите модель или удалите вложения перед отправкой.", "Switch models or remove attachments before sending."));
+      return;
+    }
+    if (images.some(image => !image.base64 || !image.mimeType)) {
+      Alert.alert(t("Не удалось прочитать изображение", "Unable to read image"), t("Удалите повреждённое вложение и выберите его повторно.", "Remove the unreadable attachment and select it again."));
+      return;
+    }
+
+    // Bound the combined encoded payload before persisting it or invoking a provider.
+    if (images.reduce((total, image) => total + (image.base64?.length ?? 0), 0) > 8 * 1024 * 1024) {
+      Alert.alert(t("Слишком много данных во вложениях", "Attachments are too large"), t("Уменьшите количество или размер фотографий. Общий лимит: 6 МиБ изображений после кодирования JPEG.", "Reduce the number or size of photos. Combined limit: 6 MiB of JPEG image data."));
+      return;
+    }
 
     let next = mappings;
     let parent: string | undefined;
@@ -43,7 +63,7 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
         parent,
         undefined,
         undefined,
-        { title: "New Chat", ...getMetadata() }
+        { title: t("Новый чат", "New Chat"), ...getMetadata() }
       );
     }
 
@@ -98,6 +118,24 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
           updateTime: new Date().toISOString(),
         }))
       );
+    }, async (usage: TokenUsage) => {
+      // Snapshot the manual rates when usage arrives, not at render time.
+      let rates = readUsageRates(null);
+      try {
+        const saved = await AsyncStorage.getItem("dual-mind-usage-rates-v1");
+        if (saved) rates = readUsageRates(JSON.parse(saved));
+      } catch (error) {
+        console.warn("Unable to read token pricing:", error);
+      }
+      setMappings(prev => updateContent(prev, responseId, content => content, meta => ({
+        ...meta,
+        tokenUsage: {
+          usage,
+          mode: ["Llama", "Ollama", "llmman"].includes(LLM.type) ? "local" : "cloud",
+          pricing: rates.pricing,
+          fx: rates.fx,
+        },
+      })));
     });
   };
 
@@ -192,7 +230,7 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
   if (dictating) {
     return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Text accessibilityRole="text" style={{ color: colorScheme.primary, fontWeight: "bold" }}>● Запись</Text>
+        <Text accessibilityRole="text" style={{ color: colorScheme.primary, fontWeight: "bold" }}>{t("● Запись", "● Recording")}</Text>
         <MaterialIconButton testID="stop-dictate-button" icon="stop-circle" size={28}
           color={colorScheme.primary} onPress={() => ExpoSpeechRecognitionModule.stop()} />
         {promptText.trim().length > 0 && (
@@ -214,7 +252,7 @@ function PromptButton({ promptText, setPromptText, images, setImages }: PromptBu
       />
     );
   }
-  else if (promptText.trim().length > 0) {
+  else if (promptText.trim().length > 0 || images.length > 0) {
     return (
       <MaterialIconButton
         testID="send-button"

@@ -1,13 +1,17 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import Popover from "@/components/views/popover-view";
 import { useChat, useSystem } from "@/context";
 import * as FileSystem from "expo-file-system/legacy";
 import { deleteNode, getRootMapping, MessageNode, updateContent } from "message-nodes";
 import { useEffect, useRef, useState } from "react";
-import { Alert, LayoutRectangle, StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
+import { Alert, LayoutRectangle, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions } from "react-native";
 
 function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: string }) {
   const { root, setRoot, mappings, setMappings } = useChat();
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
+  const t = (ru: string, en: string) => translateUi(language, ru, en);
+  const { width: screenWidth, fontScale } = useWindowDimensions();
   const [visible, setVisible] = useState<boolean>(false);
   const [rename, setRename] = useState<boolean>(false);
   const [renameEvent, setRenameEvent] = useState<string>("");
@@ -37,7 +41,7 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
   const exportChat = async () => {
     const rootMapping = getRootMapping<string>(mappings, node.id);
 
-    const filename = `${node.metadata?.title || "New Chat"}.json`;
+    const filename = `${node.metadata?.title || t("Новый чат", "New Chat")}.json`;
 
     const json = JSON.stringify(rootMapping, null, 2);
 
@@ -63,9 +67,9 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
 
   const deleteChat = () => {
     setVisible(false);
-    Alert.alert("Удалить чат?", "Этот чат будет удалён без возможности восстановления.", [
-      { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: () => {
+    Alert.alert(t("Удалить чат?", "Delete chat?"), t("Этот чат будет удалён без возможности восстановления.", "This chat will be permanently deleted."), [
+      { text: t("Отмена", "Cancel"), style: "cancel" },
+      { text: t("Удалить", "Delete"), style: "destructive", onPress: () => {
         if (root === node.id) setRoot(undefined);
         setMappings(prev => deleteNode(prev, node.id));
       } },
@@ -89,7 +93,7 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
       color: colorScheme.primary
     },
     popoverButton: {
-      paddingVertical: 8,
+      paddingVertical: 12,
       paddingHorizontal: 12,
       color: colorScheme.onSurface,
       fontSize: 16,
@@ -113,7 +117,7 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
           ]}
           numberOfLines={1}
         >
-          {node.metadata?.title || "New Chat"}
+          {node.metadata?.title || t("Новый чат", "New Chat")}
         </Text>
       </TouchableOpacity>}
       {rename && <TextInput
@@ -124,7 +128,7 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
           styles.buttonText, 
           root === node.id ? styles.buttonTextActive : null
         ]}
-        defaultValue={node.metadata?.title || "New Chat"}
+        defaultValue={node.metadata?.title || t("Новый чат", "New Chat")}
         onChange={(e) => setRenameEvent(e.nativeEvent.text)}
         onEndEditing={(e) => renameChat(e.nativeEvent.text)}
         autoFocus
@@ -133,7 +137,7 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
         position="bottom"
         anchor={anchor}
         offset={{ y: (anchor?.height ?? 0) }}
-        width={120}
+        width={Math.min( Math.max(220, 196 * fontScale), Math.max(1, screenWidth - 32))}
         visible={visible}
         onClose={() => setVisible(false)}
       >
@@ -144,25 +148,25 @@ function ChatButton({ node, testID }: { node: MessageNode<string>, testID?: stri
             setRename(true);
           }}
         >
-          <Text style={styles.popoverButton}>Переименовать</Text>
+          <Text style={styles.popoverButton}>{t("Переименовать", "Rename")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`${testID}-export`}
           onPress={exportChat}
         >
-          <Text style={styles.popoverButton}>Экспортировать</Text>
+          <Text style={styles.popoverButton}>{t("Экспортировать", "Export")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`${testID}-archive`}
           onPress={toggleArchive}
         >
-          <Text style={styles.popoverButton}>{node.metadata?.archived ? "Восстановить" : "В архив"}</Text>
+          <Text style={styles.popoverButton}>{node.metadata?.archived ? t("Восстановить", "Restore") : t("В архив", "Archive")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID={`${testID}-delete`}
           onPress={deleteChat}
         >
-          <Text style={styles.popoverButton}>Удалить чат</Text>
+          <Text style={styles.popoverButton}>{t("Удалить чат", "Delete chat")}</Text>
         </TouchableOpacity>
       </Popover>
     </>

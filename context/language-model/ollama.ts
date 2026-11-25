@@ -49,7 +49,7 @@ export async function connectOllama(
       const modelInfo = await ollama.show({ model });
       return modelInfo.capabilities.includes("vision");
     },
-    prompt: async ({ model, messages, parameters, onUpdate, shouldStop }) => {
+    prompt: async ({ model, messages, parameters, onUpdate, onUsage, shouldStop }) => {
       const response = await ollama.chat({
         model,
         messages: parseMessages(messages),
@@ -63,7 +63,18 @@ export async function connectOllama(
           break;
         }
 
-        onUpdate(chunk.message.content);
+        if (chunk.message?.content) onUpdate(chunk.message.content);
+        // Ollama reports exact token counts in the final streaming chunk.
+        if (chunk.done && typeof chunk.prompt_eval_count === 'number' &&
+            Number.isSafeInteger(chunk.prompt_eval_count) && chunk.prompt_eval_count >= 0 &&
+            typeof chunk.eval_count === 'number' &&
+            Number.isSafeInteger(chunk.eval_count) && chunk.eval_count >= 0) {
+          onUsage?.({
+            inputTokens: chunk.prompt_eval_count,
+            outputTokens: chunk.eval_count,
+            source: 'local-engine',
+          });
+        }
       }
     },
   };

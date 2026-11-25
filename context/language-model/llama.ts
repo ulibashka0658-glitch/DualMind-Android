@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { readLlamaCompletionUsage } from "@/lib/llama-usage";
 import { DocumentPickerAsset, getDocumentAsync } from "expo-document-picker";
 import * as FileSystem from 'expo-file-system/legacy';
 import { initLlama, loadLlamaModelInfo, RNLlamaOAICompatibleMessage } from 'llama.rn';
@@ -44,11 +45,18 @@ async function isGGUF(fileUri: string): Promise<boolean> {
   }
 };
 
-function parseMessages(messages: Array<MessageNode>): Array<RNLlamaOAICompatibleMessage> {
-  return messages.map((message) => {
+export function parseMessages(messages: Array<MessageNode>, imagesSupported: boolean): Array<RNLlamaOAICompatibleMessage> {
+  const lastUserIndex = messages.map(message => message.role).lastIndexOf("user");
+  return messages.map((message, index) => {
     const images: Array<string> | undefined = (message.metadata as any)?.images;
 
     if (images && images.length > 0) {
+      if (!imagesSupported) {
+        if (index === lastUserIndex) {
+          throw new Error("The selected model does not support images");
+        }
+        return { role: message.role, content: String(message.content ?? "") + "\n[Image unavailable to the selected text-only model]" } as RNLlamaOAICompatibleMessage;
+      }
       return {
         role: message.role,
         content: [
@@ -118,7 +126,7 @@ export async function pickModelFile(modelFiles: Record<string, string>): Promise
   const asset = await pickFile();
   if (!asset) return;
 
-  if (!/\.gguf$/i.test(asset.uri) || !(await isGGUF(asset.uri))) {
+  if (!/\.gguf$/i.test(asset.name) || !(await isGGUF(asset.uri))) {
     alert("Please select a valid GGUF model file");
     return;
   }
@@ -130,8 +138,8 @@ export async function pickProjectorFile(projectorFiles: Record<string, string>):
   const asset = await pickFile();
   if (!asset) return;
 
-  if (!/\.mmproj$/i.test(asset.uri) && !/\.gguf$/i.test(asset.uri)) {
-    alert("Please select a multimodel projector file");
+  if (!/\.(mmproj|gguf)$/i.test(asset.name) || !(await isGGUF(asset.uri))) {
+    alert("Please select a valid GGUF multimodal projector file");
     return;
   }
 
@@ -162,6 +170,11 @@ export async function connectLlama(
       ? projectorFiles[projectorKey]
       : undefined;
 
+  // Revalidate persisted projector paths before passing them to native code.
+  if (projectorFile && !(await isGGUF(projectorFile))) {
+    throw new Error("Selected multimodal projector is missing or is not a valid GGUF file");
+  }
+
   const { response_language: _responseLanguage, ...contextParameters } = parameters;
   const llama = await measureLlama("load", () => initLlama({
     model: modelFile,
@@ -178,13 +191,16 @@ export async function connectLlama(
 
   if (projectorFile) {
     try {
-      await llama.initMultimodal({
+      const initialized = await llama.initMultimodal({
         path: projectorFile,
         use_gpu: true
       });
 
+      if (initialized === false) {
+        throw new Error("Multimodal projector initialization failed");
+      }
       const support = await llama.getMultimodalSupport();
-      imagesSupported = support.vision;
+      imagesSupported = support.vision === true;
     } catch (error) {
       await llama.release();
       throw error;
@@ -193,7 +209,7 @@ export async function connectLlama(
 
   return {
     imagesSupported,
-    prompt: async ({ messages, onUpdate, parameters: sampling }) => {
+    prompt: async ({ messages, onUpdate, onUsage, parameters: sampling }) => {
       const bounded = (key: string, fallback: number, min: number, max: number) => {
         const value = sampling[key];
         return typeof value === "number" && Number.isFinite(value)
@@ -203,9 +219,11 @@ export async function connectLlama(
         temperature: bounded("temperature", 0.6, 0, 2),
         top_p: bounded("top_p", 0.9, 0, 1),
         top_k: Math.round(bounded("top_k", 40, 0, 200)),
-        messages: withRussianLanguageHint(parseMessages(messages), sampling.response_language)
+        messages: withRussianLanguageHint(parseMessages(messages, imagesSupported), sampling.response_language)
       }, (data) => onUpdate(data.token)));
 
+      const usage = readLlamaCompletionUsage(result.timings);
+      if (usage) onUsage?.(usage);
       console.log('Timings:', result.timings);
     },
     stop: () => measureLlama("stop", () => llama.stopCompletion()),

@@ -1,3 +1,4 @@
+import { useUiLanguage, translateUi } from "@/context/ui-language";
 import { useSystem } from "@/context";
 import { ImagePickerAsset } from "expo-image-picker";
 import { useMemo, useState } from "react";
@@ -9,6 +10,7 @@ import PromptImagesView from "../views/prompt-images-view";
 
 function PromptInputGroup() {
   const { colorScheme } = useSystem();
+  const { language } = useUiLanguage();
 
   const [promptText, setPromptText] = useState<string>("");
   const [images, setImages] = useState<Array<ImagePickerAsset>>([]);
@@ -51,7 +53,7 @@ function PromptInputGroup() {
           <Text 
             style={styles.clearButtonText}
           >
-            Clear Prompt
+            {translateUi(language, "Очистить сообщение", "Clear Prompt")}
           </Text>
         </TouchableOpacity>
       )}
